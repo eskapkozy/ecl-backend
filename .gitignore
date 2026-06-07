@@ -1,0 +1,22 @@
+# Données brutes
+data/raw/
+data/working/
+*.txt
+*.csv
+
+# Environnement Python
+__pycache__/
+*.pyc
+.env
+venv/
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.idea/
+*.iml
+
+# Exceptions — garder les parquet clean
+!data/processed/*.parquet
