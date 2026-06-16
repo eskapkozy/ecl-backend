@@ -25,6 +25,7 @@ X_new      = pipeline.transform(hist_new, orig_new)
 
 import pandas as pd
 import numpy as np
+from optbinning import OptimalBinning
 
 from src.pipelines.window_builder           import WindowBuilder
 from src.pipelines.delinquency_features     import DelinquencyFeatures
@@ -131,6 +132,8 @@ class FeaturePipeline:
         # Etape 6 — Imputation
         data = self._impute(data)
 
+        return data, hist_12m  # retourne les deux
+
         return data
 
     # ------------------------------------------------------------------
@@ -144,11 +147,11 @@ class FeaturePipeline:
         Construit les features, la target, applique le scaling.
         Retourne (X, y) prêts pour l'entraînement.
         """
-        data = self._build_features(hist, orig)
+        data, hist_12m = self._build_features(hist, orig)
 
-        # Target
-        target_df = self._build_target(hist)
-        data      = data.merge(target_df, on="LOAN_SEQUENCE_NUMBER", how="inner")
+        # Target sur la fenêtre d'observation
+        target_df = self._build_target(hist_12m)
+        data = data.merge(target_df, on="LOAN_SEQUENCE_NUMBER", how="inner")
 
         # Sélection + scaling
         X, y = self.selector.fit_transform(data, target=target)
@@ -159,6 +162,13 @@ class FeaturePipeline:
 
         return X_woe, y
 
+    # --------------------------------
+    # INtegration de variable
+    # --------------------------------
+
+
+
+
     # ------------------------------------------------------------------
     # Transform (inférence)
     # ------------------------------------------------------------------
@@ -168,8 +178,8 @@ class FeaturePipeline:
         """
         Applique le pipeline sur de nouvelles données sans recalculer le scaling.
         """
-        data  = self._build_features(hist, orig)
-        X     = self.selector.transform(data)
+        data, hist_12m = self._build_features(hist, orig)
+        X = self.selector.transform(data)
 
         if self.woe_pipeline_ is None:
             raise RuntimeError("fit_transform doit être appelé avant transform.")
