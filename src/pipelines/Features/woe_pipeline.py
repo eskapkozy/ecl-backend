@@ -34,6 +34,7 @@ class WoePipeline:
         )
         self.variable_names = self.x_data.columns.tolist()
 
+
         # Fit ou réutilisation
         if binning_process is not None:
             self.capturedFit = binning_process
