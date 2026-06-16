@@ -1,134 +1,128 @@
 """
-Feature Engineering — Groupe Retard
-=====================================
-Approche : Question-driven feature engineering
-Responsabilité : calcul des features uniquement
-                 (la fenêtre est gérée par WindowBuilder)
-
-Colonnes requises dans le DataFrame entrant :
-    - LOAN_SEQUENCE_NUMBER
-    - DPD_DAYS  (produit par WindowBuilder)
+Feature Engineering — Groupe Retard (vectorisé v3)
+====================================================
+Optimisation v3 :
+    - Un seul groupby.agg pour freq, severite, profondeur_max, n_profondeur_max
+    - Transforms partagés calculés une seule fois dans __init__
+    - Tendance et récupération sur self.df déjà enrichi
 """
 
 import pandas as pd
 import numpy as np
-from scipy import stats
-
+import time
 
 class DelinquencyFeatures:
-    """
-    Calcule les features comportementales du groupe Retard.
-    Attend un DataFrame déjà découpé en fenêtre par WindowBuilder.
-
-    Usage
-    -----
-    from window_builder import WindowBuilder
-    from delinquency_features import DelinquencyFeatures
-
-    df_win   = WindowBuilder(df, window_months=12).build()
-    features = DelinquencyFeatures(df_win).build()
-    """
 
     LOAN_COL = "LOAN_SEQUENCE_NUMBER"
-    DPD_COL  = "DPD_DAYS"
+    DPD_COL  = "CURRENT_LOAN_DELINQUENCY_STATUS"
 
     def __init__(self, df: pd.DataFrame):
+
+        t0 = time.time()
         self.df = df.copy()
+        print(f"Copy DataFrame     : {time.time()-t0:.1f}s")
+
+
+        t0 = time.time()
+        # Cast DPD
+        self.df[self.DPD_COL] = (
+            pd.to_numeric(self.df[self.DPD_COL], errors="coerce").fillna(0)
+        )
+        print(f"Cast DPD           : {time.time()-t0:.1f}s")
+
+
+        t0 = time.time()
+        self.gpr = self.df.groupby(self.LOAN_COL)
+        print(f"Groupby            : {time.time()-t0:.1f}s")
+
+
+        t0 = time.time()
+        # Colonnes de travail — calculées une seule fois
+        self.df["_t"]         = self.gpr.cumcount()
+        self.df["_en_retard"] = (self.df[self.DPD_COL] > 0).astype(int)
+        self.df["_max_dpd"]   = self.gpr[self.DPD_COL].transform("max")
+        self.df["_t_mean"]    = self.gpr["_t"].transform("mean")
+        self.df["_y_mean"]    = self.gpr[self.DPD_COL].transform("mean")
+        print(f"Colonnes de travail: {time.time()-t0:.1f}s")
+
+
+        # Shift pour récupération — calculé une seule fois
+        self.df["_shift"]  = self.gpr["_en_retard"].shift(1).fillna(0)
+        self.df["_debut"]  = ((self.df["_en_retard"] == 1) & (self.df["_shift"] == 0)).astype(int)
 
     # ------------------------------------------------------------------
-    # Angle 1 — Fréquence
-    # Question : combien de fois le client est-il en retard ?
+    # Agrégation centralisée — un seul groupby
     # ------------------------------------------------------------------
 
-    def _frequence(self, g: pd.DataFrame) -> float:
-        """Ratio mois en retard / total mois observés."""
-        return (g[self.DPD_COL] > 0).sum() / len(g)
 
-    # ------------------------------------------------------------------
-    # Angle 2 — Sévérité
-    # Question : en moyenne jusqu'où vont les retards ?
-    # ------------------------------------------------------------------
 
-    def _severite(self, g: pd.DataFrame) -> float:
-        """DPD moyen sur la fenêtre."""
-        return g[self.DPD_COL].mean()
-
-    # ------------------------------------------------------------------
-    # Angle 3 — Tendance
-    # Question : les retards augmentent-ils ou diminuent-ils ?
-    # ------------------------------------------------------------------
-
-    def _tendance(self, g: pd.DataFrame) -> float:
+    def _agg_principal(self) -> pd.DataFrame:
         """
-        Slope d'une régression linéaire sur la séquence DPD.
-        Positif = dégradation / Négatif = amélioration / ~0 = stable.
+        Calcule freq, severite, profondeur_max, n_profondeur_max
+        en un seul groupby.agg.
         """
-        x = np.arange(len(g))
-        y = g[self.DPD_COL].values
-        if y.std() == 0:
-            return 0.0
-        slope, *_ = stats.linregress(x, y)
-        return slope
+        self.df["_at_max"] = (
+            (self.df[self.DPD_COL] == self.df["_max_dpd"]) &
+            (self.df["_max_dpd"] > 0)
+        ).astype(int)
+
+        return self.gpr.agg(
+            freq            = ("_en_retard", "mean"),
+            severite        = (self.DPD_COL, "mean"),
+            profondeur_max  = (self.DPD_COL, "max"),
+            n_profondeur_max= ("_at_max", "sum"),
+        ).reset_index()
 
     # ------------------------------------------------------------------
-    # Angle 4 — Récupération
-    # Question : le client parvient-il à revenir à 0 DPD ?
+    # Tendance — slope vectorisé
     # ------------------------------------------------------------------
 
-    def _recuperation(self, g: pd.DataFrame) -> float:
-        """
-        Nombre moyen de mois pour revenir à 0 DPD après un épisode de retard.
-        Retourne NaN si aucun retard observé.
-        """
-        dpd    = g[self.DPD_COL].values
-        delais = []
-        i      = 0
-        while i < len(dpd):
-            if dpd[i] > 0:
-                j = i + 1
-                while j < len(dpd) and dpd[j] > 0:
-                    j += 1
-                if j < len(dpd):
-                    delais.append(j - i)
-                i = j
-            else:
-                i += 1
-        return float(np.mean(delais)) if delais else np.nan
+    def _tendance(self) -> pd.Series:
+        num = (
+            ((self.df["_t"] - self.df["_t_mean"]) *
+             (self.df[self.DPD_COL] - self.df["_y_mean"]))
+            .groupby(self.df[self.LOAN_COL]).sum()
+        )
+        den = (
+            ((self.df["_t"] - self.df["_t_mean"]) ** 2)
+            .groupby(self.df[self.LOAN_COL]).sum()
+        )
+        return (num / den.replace(0, np.nan)).rename("tendance")
 
     # ------------------------------------------------------------------
-    # Angle 5 — Profondeur maximale
-    # Question : quel est le pire DPD jamais atteint ?
+    # Récupération — durée moyenne des épisodes de retard
     # ------------------------------------------------------------------
 
-    def _profondeur_max(self, g: pd.DataFrame) -> float:
-        """DPD maximum atteint sur la fenêtre."""
-        return g[self.DPD_COL].max()
+    def _recuperation(self) -> pd.Series:
+        episode = (
+            self.gpr["_debut"]
+            .cumsum()
+            .where(self.df["_en_retard"] == 1)
+        )
 
-    def _n_profondeur_max(self, g: pd.DataFrame) -> int:
-        """Nombre de mois où le DPD maximum a été atteint (récidivisme)."""
-        max_dpd = g[self.DPD_COL].max()
-        if max_dpd == 0:
-            return 0
-        return int((g[self.DPD_COL] == max_dpd).sum())
+        dur = (
+            episode
+            .groupby([self.df[self.LOAN_COL], episode])
+            .transform("count")
+            .where(self.df["_en_retard"] == 1)
+        )
+
+        return (
+            dur.groupby(self.df[self.LOAN_COL])
+            .mean()
+            .rename("recuperation")
+        )
 
     # ------------------------------------------------------------------
     # Combinaisons
     # ------------------------------------------------------------------
 
-    def _combinaisons(self, row: pd.Series) -> pd.Series:
-        """Features combinées — amplification mutuelle des signaux."""
-        freq     = row["freq"]
-        prof_max = row["profondeur_max"]
-        n_max    = row["n_profondeur_max"]
-        tendance = row["tendance"]
-        recup    = row["recuperation"]
-
-        return pd.Series({
-            "freq_x_profondeur_max" : freq * prof_max,
-            "freq_x_tendance"       : freq * tendance,
-            "freq_x_recuperation"   : freq * recup if not np.isnan(recup) else np.nan,
-            "recidivisme_extreme"   : n_max * prof_max,
-        })
+    def _combinaisons(self, agg: pd.DataFrame) -> pd.DataFrame:
+        agg["freq_x_profondeur_max"] = agg["freq"] * agg["profondeur_max"]
+        agg["freq_x_tendance"]       = agg["freq"] * agg["tendance"]
+        agg["freq_x_recuperation"]   = agg["freq"] * agg["recuperation"]
+        agg["recidivisme_extreme"]   = agg["n_profondeur_max"] * agg["profondeur_max"]
+        return agg
 
     # ------------------------------------------------------------------
     # Build
@@ -136,21 +130,18 @@ class DelinquencyFeatures:
 
     def build(self) -> pd.DataFrame:
         """
-        Retourne une table agrégée — une ligne par prêt —
-        avec toutes les features du groupe Retard.
+        Retourne une table agrégée — une ligne par prêt.
+        Un seul groupby.agg pour les métriques principales.
         """
+        agg = self._agg_principal()
+
+        tendance     = self._tendance().reset_index()
+        recuperation = self._recuperation().reset_index()
+
         agg = (
-            self.df.groupby(self.LOAN_COL)
-            .apply(lambda g: pd.Series({
-                "freq"             : self._frequence(g),
-                "severite"         : self._severite(g),
-                "tendance"         : self._tendance(g),
-                "recuperation"     : self._recuperation(g),
-                "profondeur_max"   : self._profondeur_max(g),
-                "n_profondeur_max" : self._n_profondeur_max(g),
-            }))
-            .reset_index()
+            agg
+            .merge(tendance,     on=self.LOAN_COL, how="left")
+            .merge(recuperation, on=self.LOAN_COL, how="left")
         )
 
-        combinaisons = agg.apply(self._combinaisons, axis=1)
-        return pd.concat([agg, combinaisons], axis=1)
+        return self._combinaisons(agg)
