@@ -65,6 +65,7 @@ class RunAbstraction(ABC):
         self._model_artifact = None
         self._artifact_manager = ArtifactManager()
 
+
     # ------------------------------------------------------------------
     # Contrat — à implémenter par les sous-classes concrètes
     # ------------------------------------------------------------------
@@ -123,3 +124,10 @@ class RunAbstraction(ABC):
             raise ValueError("Un mapping de validation a été fourni pendant un run de test.")
         if self._is_train and test_map is not None:
             raise ValueError("Un mapping de test a été fourni pendant un run de train.")
+
+    @abstractmethod
+    def save_evaluation_metrics(self, test_config_path: str):
+        raise NotImplementedError
+
+    def y_true(self):
+        return self._y_test

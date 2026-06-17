@@ -40,7 +40,7 @@ class PDRun(RunAbstraction):
                  val_map: dict = None, config_path: str = None):
         super().__init__(train_map, test_map, val_map, config_path)
 
-        self.feature_pipeline: PDFeaturePipeline = None
+        self.featurePipeline : PDFeaturePipeline = None
 
         # Métriques de classification — choisies lors de l'optimisation du seuil
         self._chosen_threshold = None
@@ -119,7 +119,7 @@ class PDRun(RunAbstraction):
         self._best_precision   = best_precision
         self._best_f1          = best_f1
 
-    def save_pd_evaluation_metrics(self, test_config_path: str):
+    def save_evaluation_metrics(self, test_config_path: str):
         """
         Écrit les métriques du dernier run dans le fichier de config test.
         À appeler manuellement après validation visuelle des métriques dans MLflow.
@@ -154,12 +154,11 @@ class PDRun(RunAbstraction):
 
 
     def threshold(self, y_data, y_proba):
-
         threshold = np.arange(0.1, 0.99, 0.01)
         best_recall = 0
         chosen_threshold = 0
-        predicted_new = 0
-        best_f1 = 0
+        predicted_new = np.zeros_like(y_data)
+        best_f1 = -1
         best_precision = 0
 
         for t in threshold:
@@ -168,11 +167,35 @@ class PDRun(RunAbstraction):
             p = precision_score(y_data, y_pred)
             f1 = f1_score(y_data, y_pred)
 
-            if r >= 0.90 and p >= 0.35 and f1 > best_f1:
+            if r >= 0.90 and f1 > best_f1:
                 best_f1 = f1
                 chosen_threshold = t
                 predicted_new = y_pred
                 best_recall = r
                 best_precision = p
 
-        return {'recall':best_recall, "precision":best_precision,"f1":best_f1, "pred":predicted_new, "threshold":chosen_threshold}
+        self._chosen_threshold = chosen_threshold
+        self._best_recall = best_recall
+        self._best_precision = best_precision
+        self._best_f1 = best_f1
+
+        return {'recall': best_recall, "precision": best_precision, "f1": best_f1,
+                "pred": predicted_new, "threshold": chosen_threshold}
+
+
+
+
+    def apply_threshold(self, y_data, y_proba):
+
+        """
+            Appliquer le seuil est metrique trouver en train
+        """
+
+        threshold = self.config['evaluation']['threshold']
+        recall = self.config['evaluation']['recall_threshold']
+        precision = self.config['evaluation']['precision_threshold']
+        f1 = self.config['evaluation']['f1_threshold']
+
+        predicted_new = (y_proba >= threshold).astype(int)
+
+        return recall, precision, f1, predicted_new, threshold

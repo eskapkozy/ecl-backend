@@ -1,0 +1,66 @@
+run:
+  name: "Logistic regression Train"
+  version: 1
+  random_state: 42
+  is_train: true
+
+
+
+# Model
+model:
+  name: "logistic_regression"
+  hyperparameters:
+    regularisation:
+      C: 1.0
+      penalty: "l2"
+      tol: 0.0001
+      random_state: 42
+    max_iter: 1000
+    solver: "lbfgs"
+    class_weight: "balanced"
+
+# Component
+
+woe:
+  enabled: true
+  iv_threshold: 0.02
+  metric: "woe"
+  persistence: false
+
+smote:
+  enabled: true
+  sampling_strategy: "auto"
+  random_state: 42
+
+correlation:
+  enabled: true
+  threshold: 0.8
+
+# Evaluation & Metrics
+
+evaluation:
+  roc_auc: true
+  recall: true
+  precision: true
+  f1_score: true
+  confusion_matrix: true
+  # on considere en deffaut un seuil de 26% ( methode prudente )
+  threshold: 0.26
+  # contrainte
+  recall_threshold: 0.90
+  precision_threshold: 0.35
+  f1_threshold: 0.35
+
+# Techno Used
+
+mlflow:
+  tracking_uri: "http://localhost:5000"
+  experiment_name: "classification"
+
+
+# Livrable ( Artifacts , Reports , Plot )
+
+artifacts:
+  log_model: true
+  log_woe: true
+  log_reports: true
