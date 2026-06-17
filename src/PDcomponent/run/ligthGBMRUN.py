@@ -1,20 +1,17 @@
 from src.pipelines.Features.featurePipeline import FeaturePipeline
-from src.Utile.artifactManager import ArtifactType
-from src.runAbstraction import RunAbstraction
 
-import numpy as np
-import yaml
-import matplotlib.pyplot as plt
+
+
 import mlflow.sklearn
-from sklearn.linear_model import LogisticRegression
+import lightgbm as lgb
 
-from sklearn.metrics import f1_score, roc_auc_score, recall_score, precision_score, confusion_matrix, accuracy_score, \
-    RocCurveDisplay, PrecisionRecallDisplay
+from sklearn.metrics import  roc_auc_score, confusion_matrix, accuracy_score
+
 
 from src.PDcomponent.pipelines.pdFeaturePipeline import PDFeaturePipeline
 from src.PDcomponent.run.pdRUN import PDRun
 
-class LogistiqueRegressionTrainRun(PDRun):
+class LightGBMRun(PDRun):
 
     def __init__(self, train_map: dict = None, test_map: dict = None, val_map: dict = None,config_path: str = None):
         super().__init__(train_map, test_map, val_map, config_path)
@@ -51,22 +48,19 @@ class LogistiqueRegressionTrainRun(PDRun):
         hyperparameters = self.config['model']['hyperparameters']
 
         # class weight
-        class_weight = hyperparameters['class_weight']
+        neg = (y_train_resampled == 0).sum()
+        pos = (y_train_resampled == 1).sum()
+        scale_pos_weight = neg / pos
 
-        # nombre max d'itération
-        max_iter = int(hyperparameters['max_iter'])
+        # early point
+        early_stopping_rounds = hyperparameters['early_stopping_rounds']
 
-        # Algo d'optimisation
-        solver = hyperparameters['solver']
+        # metric
+        eval_metric = hyperparameters['metric']
 
-        # regularisation
-        penalty = hyperparameters['regularisation']['penalty']
+        # Regularisation params
+        regularisation = hyperparameters['regularisation']
 
-        # tolerance
-        tol = hyperparameters['regularisation']['tol']
-
-        C = hyperparameters['regularisation']['C']
-        # random_state = hyperparameters['regularisation']['random_state']
 
         # ########################
         # Run
@@ -77,9 +71,23 @@ class LogistiqueRegressionTrainRun(PDRun):
             mlflow.log_params(self.config['model'])
 
             # model fit + get artefact
-            model = LogisticRegression(max_iter=max_iter, class_weight=class_weight, penalty=penalty, solver=solver,
-                                       C=C, tol=tol)
-            self.model_artifact = model.fit(x_train_resampled, y_train_resampled)
+            model = lgb.LGBMClassifier(
+                # regularisation
+                **regularisation,
+                # early point
+                early_stopping_rounds=early_stopping_rounds,
+                metric=eval_metric,
+
+                # class weight
+                scale_pos_weight=scale_pos_weight,
+
+
+            )
+            self.model_artifact = model.fit(
+                x_train_resampled, y_train_resampled,
+                eval_set=[(x_val_transformed, y_val)],
+                eval_metric=eval_metric
+            )
 
             # ########################
             # Validation Prediction
@@ -142,8 +150,6 @@ class LogistiqueRegressionTrainRun(PDRun):
         return None
 
 
-    
-
     def _run_test(self):
         # ########################
         # Load Artifact
@@ -200,9 +206,6 @@ class LogistiqueRegressionTrainRun(PDRun):
 
         return None
 
-
-
-
     def _load_data(self):
         run_id = self.config['mlflow']['run_artifact_path']['run_id']
         binning_config = self.config['mlflow']['run_artifact_path']['binning_process']
@@ -210,21 +213,6 @@ class LogistiqueRegressionTrainRun(PDRun):
 
         config = [binning_config, model_fit_config]
         return self._artifact_manager.load_All(run_id=run_id, configList=config)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
