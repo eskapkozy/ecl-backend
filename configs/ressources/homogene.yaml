@@ -1,0 +1,104 @@
+run:
+  name: "ensemble_heterogene Train"
+
+  version: 1
+  random_state: 42
+  is_train: true
+
+
+model:
+  type: "stacking_heterogeneous"
+  hyperparameters:
+
+    # ── Stacking ──────────────────────────────────────────────────────────────
+    stacking_cv_folds: 5          # folds OOF pour générer les meta-features
+    passthrough: false            # true = passer les features brutes au méta-learner
+    calibration_cv: 5             # folds pour CalibratedClassifierCV
+    smote_sampling_strategy: 0.3  # ratio minoritaire cible après SMOTE
+
+    # ── LightGBM ──────────────────────────────────────────────────────────────
+    lgbm:
+      n_estimators: 500
+      learning_rate: 0.05
+      num_leaves: 63
+      subsample: 0.8
+      colsample_bytree: 0.8
+
+    # ── XGBoost ───────────────────────────────────────────────────────────────
+    xgb:
+      n_estimators: 500
+      learning_rate: 0.05
+      max_depth: 6
+      subsample: 0.8
+      colsample_bytree: 0.8
+
+    # ── Random Forest ─────────────────────────────────────────────────────────
+    rf:
+      n_estimators: 300
+      max_features: "sqrt"
+
+    # ── Logistic Regression (base) ────────────────────────────────────────────
+    lr:
+      C: 1.0
+
+    # ── SVM ───────────────────────────────────────────────────────────────────
+    svm:
+      C: 1.0
+
+    # ── Méta-learner (LogReg L2) ──────────────────────────────────────────────
+    meta:
+      C: 0.1
+
+# ── Feature pipeline ──────────────────────────────────────────────────────────
+woe:
+  enabled: true
+  iv_threshold: 0.02
+  metric: "woe"
+  persistence: false
+
+smote:
+  enabled: true
+  sampling_strategy: "auto"
+  random_state: 42
+
+correlation:
+  enabled: true
+  threshold: 0.8
+
+# Evaluation & Metrics
+
+evaluation:
+  roc_auc: true
+  recall: true
+  precision: true
+  f1_score: true
+  confusion_matrix: true
+
+
+# Livrable ( Artifacts , Reports , Plot )
+
+artifacts:
+  log_model: true
+  log_woe: true
+  log_reports: true
+
+
+mlflow:
+  tracking_uri: "http://localhost:5000"
+  experiment_name: "classification"
+
+  # Artifact path
+  run_artifact_path:
+
+    run_id: #"802e3adb80994db584fb17d8ec0eeb77"
+    binning_process:
+      name: "binning_process"
+      path: "binning_process"
+      artifact_type: "PKL"
+      ismodel: false
+
+    model_fit:
+      name: "model_fit"
+      path: "model_fit"
+      artifact_type: "PKL"
+      ismodel: false
