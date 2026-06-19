@@ -1,0 +1,90 @@
+run:
+  name: Xgboost test
+  version: 1
+  random_state: 42
+  is_train: false
+model:
+  name: Xgboost
+  eval_metric: logloss
+  early_stopping_rounds: 10
+  hyperparameters:
+    regularisation:
+      max_depth: 4
+      min_child_weight: 5
+      reg_lambda: 1.0
+      reg_alpha: 0.1
+      subsample: 0.8
+      colsample_bytree: 0.8
+      learning_rate: 0.1
+    n_estimators: 1000
+    scale_pos_weight: 1
+  grid_search:
+    n_trials: 50
+    constraints:
+      recall_min: 0.9
+      f1_min: 0.7
+      precision_min: 0.8
+    param_space:
+      max_depth:
+      - 3
+      - 7
+      min_child_weight:
+      - 1
+      - 5
+      reg_lambda:
+      - 1
+      - 10
+      reg_alpha:
+      - 0
+      - 1
+      subsample:
+      - 0.7
+      - 0.9
+      colsample_bytree:
+      - 0.7
+      - 0.9
+      learning_rate:
+      - 0.01
+      - 0.1
+      n_estimators:
+      - 100
+      - 500
+woe:
+  enabled: true
+  iv_threshold: 0.02
+  metric: woe
+  persistence: false
+smote:
+  enabled: true
+  sampling_strategy: auto
+  random_state: 42
+correlation:
+  enabled: true
+  threshold: 0.8
+evaluation:
+  threshold_result:
+    threshold: 0.45999999999999985
+  constraints_result:
+    recall:
+      value: 0.8010109071561585
+    f1:
+      value: 0.18470126364863207
+mlflow:
+  tracking_uri: http://localhost:5000
+  experiment_name: classification
+  run_artifact_path:
+    run_id: '7b18ab9b5bfb4b25b449326a46f124bf'
+    binning_process:
+      name: binning_process
+      path: binning_process
+      artifact_type: PKL
+      ismodel: false
+    model_fit:
+      name: model_fit
+      path: model_fit
+      artifact_type: PKL
+      ismodel: false
+artifacts:
+  log_model: true
+  log_woe: true
+  log_reports: true

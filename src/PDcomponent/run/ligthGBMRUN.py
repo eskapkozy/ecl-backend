@@ -1,3 +1,5 @@
+import optuna
+
 from src.pipelines.Features.featurePipeline import FeaturePipeline
 
 
@@ -13,8 +15,8 @@ from src.PDcomponent.run.pdRUN import PDRun
 
 class LightGBMRun(PDRun):
 
-    def __init__(self, train_map: dict = None, test_map: dict = None, val_map: dict = None,config_path: str = None):
-        super().__init__(train_map, test_map, val_map, config_path)
+    def __init__(self, train_map: dict = None, test_map: dict = None, val_map: dict = None,config_path: str = None,test_path:str =None):
+        super().__init__(train_map, test_map, val_map, config_path,test_path)
 
 
 
@@ -25,7 +27,7 @@ class LightGBMRun(PDRun):
 
         self.featurePipeline = PDFeaturePipeline(window_months=12, woe_config=self.config['woe'])
 
-        x_train_resampled, y_train_resampled = self.featurePipeline.apply_woe(self._x_train, self._y_train)
+        self.x_train_resampled, self.y_train_resampled = self.featurePipeline.apply_woe(self._x_train, self._y_train)
         binning_process = self.featurePipeline.binning_process
 
 
@@ -48,18 +50,18 @@ class LightGBMRun(PDRun):
         hyperparameters = self.config['model']['hyperparameters']
 
         # class weight
-        neg = (y_train_resampled == 0).sum()
-        pos = (y_train_resampled == 1).sum()
+        neg = (self.y_train_resampled == 0).sum()
+        pos = (self.y_train_resampled == 1).sum()
         scale_pos_weight = neg / pos
 
         # early point
-        early_stopping_rounds = hyperparameters['early_stopping_rounds']
+        #early_stopping_rounds = hyperparameters['early_stopping_rounds']
 
         # metric
-        eval_metric = hyperparameters['metric']
+        #eval_metric = hyperparameters['metric']
 
         # Regularisation params
-        regularisation = hyperparameters['regularisation']
+        #regularisation = hyperparameters['regularisation']
 
 
         # ########################
@@ -68,33 +70,20 @@ class LightGBMRun(PDRun):
 
         with mlflow.start_run(run_name=self.config['run']['name']) as run:
             # model param log
-            mlflow.log_params(self.config['model'])
-
-            # model fit + get artefact
-            model = lgb.LGBMClassifier(
-                # regularisation
-                **regularisation,
-                # early point
-                early_stopping_rounds=early_stopping_rounds,
-                metric=eval_metric,
-
-                # class weight
-                scale_pos_weight=scale_pos_weight,
 
 
-            )
-            self.model_artifact = model.fit(
-                x_train_resampled, y_train_resampled,
-                eval_set=[(x_val_transformed, y_val)],
-                eval_metric=eval_metric
-            )
+
+            optimal_fit = self._run_grid_search(self.x_train_resampled, self.y_train_resampled,x_val_transformed, y_val)
+            self._model_artifact = optimal_fit['best_estimator']
+
+
 
             # ########################
             # Validation Prediction
             # #######################
 
-            y_predict = model.predict(x_val_transformed)
-            y_proba = model.predict_proba(x_val_transformed)[:, 1]
+            #y_predict = model.predict(x_val_transformed)
+            y_proba = self._model_artifact.predict_proba(x_val_transformed)[:, 1]
 
             # ########################
             # Metric  ( F1 - RECALL - ROC - AUC - GINI
@@ -147,6 +136,10 @@ class LightGBMRun(PDRun):
             self._log_roc_curve(y_data=y_val, y_proba=y_proba)
             self._log_precision_recall_curve(y_data=y_val, y_proba=y_proba)
 
+            mlflow.log_params(optimal_fit['best_params'])
+
+            if self.test_path is not None:
+                self.save_evaluation_metrics(self.test_path)
         return None
 
 
@@ -189,6 +182,7 @@ class LightGBMRun(PDRun):
             accuracy = accuracy_score(y_test, predicted_new)
 
             mlflow.log_metrics({
+                'threshold': threshold,
                 'roc_auc': roc_auc,
                 'gini': gini,
                 'f1': f1,
@@ -204,6 +198,8 @@ class LightGBMRun(PDRun):
             self._log_roc_curve(y_test, y_prob)
             self._log_precision_recall_curve(y_test, y_prob)
 
+
+
         return None
 
     def _load_data(self):
@@ -214,8 +210,71 @@ class LightGBMRun(PDRun):
         config = [binning_config, model_fit_config]
         return self._artifact_manager.load_All(run_id=run_id, configList=config)
 
+    def _run_grid_search(self, X_train, y_train, X_val, y_val):
+        grid_cfg = self.config['model']['grid_search']
+        constraints = grid_cfg['constraints']
+        param_space = grid_cfg['param_space']
+        n_trials = grid_cfg.get('n_trials', 15)
 
+        def objective(trial):
+            params = {
+                'max_depth': trial.suggest_int('max_depth', *param_space['max_depth']),
+                'min_child_samples': trial.suggest_int('min_child_samples', *param_space['min_child_samples']),
+                'reg_lambda': trial.suggest_float('reg_lambda', *param_space['reg_lambda']),
+                'reg_alpha': trial.suggest_float('reg_alpha', *param_space['reg_alpha']),
+                'subsample': trial.suggest_float('subsample', *param_space['subsample']),
+                'colsample_bytree': trial.suggest_float('colsample_bytree', *param_space['colsample_bytree']),
+                'learning_rate': trial.suggest_float('learning_rate', *param_space['learning_rate']),
+                'n_estimators': trial.suggest_int('n_estimators', *param_space['n_estimators']),
+                'num_leaves': trial.suggest_int('num_leaves', *param_space['num_leaves']),
+            }
 
+            model = lgb.LGBMClassifier(
+                **params,
+                random_state=self.config['run']['random_state'],
+                eval_metric=self.config['model']['hyperparameters']['eval_metric'],
+                early_stopping_rounds=self.config['model']['hyperparameters']['early_stopping_rounds'],
+                scale_pos_weight=self.config['model']['hyperparameters']['scale_pos_weight'],
+                verbose=-1,
+            )
 
+            model.fit(X_train, y_train,
+                      eval_set=[(X_val, y_val)],
+                      callbacks=[lgb.early_stopping(self.config['model']['hyperparameters']['early_stopping_rounds'],
+                                                    verbose=False)])
+
+            y_proba = model.predict_proba(X_val)[:, 1]
+            result = self.threshold(y_val, y_proba)
+
+            r = result['recall']
+            f1 = result['f1']
+
+            print(roc_auc_score(y_val, y_proba))
+            print(r)
+
+            if r < constraints['recall_min'] and f1 < constraints['f1_min']:
+                return 0.0
+            return f1
+
+        study = optuna.create_study(direction='maximize')
+        study.optimize(objective, n_trials=n_trials)
+
+        best_model = lgb.LGBMClassifier(
+            **study.best_params,
+            random_state=self.config['run']['random_state'],
+            eval_metric=self.config['model']['hyperparameters']['eval_metric'],
+            scale_pos_weight=self.config['model']['hyperparameters']['scale_pos_weight'],
+            verbose=-1,
+        )
+        best_model.fit(X_train, y_train,
+                       eval_set=[(X_val, y_val)],
+                       callbacks=[lgb.early_stopping(
+                           self.config['model']['hyperparameters']['early_stopping_rounds'],
+                           verbose=False)])
+
+        return {
+            'best_estimator': best_model,
+            'best_params': study.best_params,
+        }
 
 

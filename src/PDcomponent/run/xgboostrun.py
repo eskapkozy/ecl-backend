@@ -1,8 +1,13 @@
+import numpy as np
+import optuna
+
+from sklearn.model_selection import GridSearchCV
+
 from src.Utile.artifactManager import ArtifactType
 import mlflow
 from xgboost import XGBClassifier
 
-from sklearn.metrics import roc_auc_score, confusion_matrix, accuracy_score
+from sklearn.metrics import roc_auc_score, confusion_matrix, accuracy_score, recall_score, precision_score, f1_score
 
 from src.PDcomponent.pipelines.pdFeaturePipeline import PDFeaturePipeline
 from src.PDcomponent.run.pdRUN import PDRun
@@ -10,9 +15,8 @@ from src.PDcomponent.run.pdRUN import PDRun
 
 class XGBoostRun(PDRun):
 
-    def __init__(self, train_map: dict = None, test_map: dict = None,
-                 val_map: dict = None, config_path: str = None):
-        super().__init__(train_map, test_map, val_map, config_path)
+    def __init__(self, train_map: dict = None, test_map: dict = None, val_map: dict = None,config_path: str = None,test_path:str =None):
+        super().__init__(train_map, test_map, val_map, config_path,test_path)
 
     def _run_train(self):
         # ########################
@@ -21,7 +25,7 @@ class XGBoostRun(PDRun):
 
         self.featurePipeline = PDFeaturePipeline(window_months=12, woe_config=self.config['woe'])
 
-        x_train_resampled, y_train_resampled = self.featurePipeline.apply_woe(self._x_train, self._y_train)
+        self.x_train_resampled, self.y_train_resampled = self.featurePipeline.apply_woe(self._x_train, self._y_train)
         binning_process = self.featurePipeline.binning_process
 
         # ########################
@@ -42,17 +46,17 @@ class XGBoostRun(PDRun):
         # ########################
 
         run_params       = self.config['run']
-        hyperparameters  = self.config['model']['hyperparameters']
-        regularisation   = hyperparameters['regularisation']
+        #hyperparameters  = self.config['model']['hyperparameters']
+        #regularisation   = hyperparameters['regularisation']
 
-        random_state           = run_params['random_state']
-        early_stopping_rounds  = hyperparameters['early_stopping_rounds']
-        eval_metric            = hyperparameters['eval_metric']
-        n_estimators            = hyperparameters['n_estimators']
+        #random_state           = run_params['random_state']
+        #early_stopping_rounds  = regularisation['early_stopping_rounds']
+        #eval_metric            = hyperparameters['eval_metric']
+        #n_estimators            = hyperparameters['n_estimators']
 
         # class weight — calculé dynamiquement à partir des données resampled
-        neg = (y_train_resampled == 0).sum()
-        pos = (y_train_resampled == 1).sum()
+        neg = (self.y_train_resampled == 0).sum()
+        pos = (self.y_train_resampled == 1).sum()
         scale_pos_weight = neg / pos
 
         # ########################
@@ -60,46 +64,21 @@ class XGBoostRun(PDRun):
         # ########################
 
         with mlflow.start_run(run_name=run_params['name']) as run:
-            mlflow.log_params(self.config['model'])
-            mlflow.log_param('random_state', random_state)
-            mlflow.log_param('scale_pos_weight', scale_pos_weight)
 
-            model = XGBClassifier(
-                # Reproductibilité
-                random_state=random_state,
+            #mlflow.log_param('random_state', random_state)
+            #mlflow.log_param('scale_pos_weight', scale_pos_weight)
 
-                # Régularisation
-                max_depth=regularisation['max_depth'],
-                min_child_weight=regularisation['min_child_weight'],
-                reg_lambda=regularisation['reg_lambda'],
-                reg_alpha=regularisation['reg_alpha'],
-                subsample=regularisation['subsample'],
-                colsample_bytree=regularisation['colsample_bytree'],
-                learning_rate=regularisation['learning_rate'],
+            optimal_fit = self._run_grid_search(self.x_train_resampled, self.y_train_resampled,x_val_transformed, y_val)
+            self._model_artifact = optimal_fit['best_estimator']
 
-                # Arrêt anticipé
-                n_estimators=n_estimators,
-                early_stopping_rounds=early_stopping_rounds,
 
-                # Métrique de suivi
-                eval_metric=eval_metric,
 
-                # Pondération des classes
-                scale_pos_weight=scale_pos_weight,
-            )
-
-            # eval_set requis pour early_stopping_rounds — calculé AVANT le fit
-            self._model_artifact = model.fit(
-                x_train_resampled, y_train_resampled,
-                eval_set=[(x_val_transformed, y_val)],
-                verbose=False
-            )
 
             # ########################
             # Validation Prediction
             # ########################
 
-            y_proba = model.predict_proba(x_val_transformed)[:, 1]
+            y_proba = self._model_artifact.predict_proba(x_val_transformed)[:, 1]
 
             # ########################
             # Metrics
@@ -142,6 +121,13 @@ class XGBoostRun(PDRun):
             self._log_roc_curve(y_data=y_val, y_proba=y_proba)
             self._log_precision_recall_curve(y_data=y_val, y_proba=y_proba)
 
+            # log model hyerparamettre
+            #mlflow.log_params(self.config['model'])
+            mlflow.log_params(optimal_fit['best_params'])
+
+            if self.test_path is not None:
+                self.save_evaluation_metrics(self.test_path)
+
         return None
 
     def _run_test(self):
@@ -183,6 +169,7 @@ class XGBoostRun(PDRun):
             accuracy       = accuracy_score(y_test, predicted_new)
 
             mlflow.log_metrics({
+                'threshold': threshold,
                 'roc_auc': roc_auc,
                 'gini': gini,
                 'f1': f1,
@@ -199,6 +186,79 @@ class XGBoostRun(PDRun):
             self._log_precision_recall_curve(y_test, y_prob)
 
         return None
+
+    def _run_grid_search(self, X_train, y_train, X_val, y_val):
+        grid_cfg = self.config['model']['grid_search']
+        constraints = grid_cfg['constraints']
+        param_space = grid_cfg['param_space']
+        n_trials = grid_cfg.get('n_trials', 15)
+
+        def objective(trial):
+            params = {
+                'max_depth': trial.suggest_int('max_depth', *param_space['max_depth']),
+                'min_child_weight': trial.suggest_int('min_child_weight', *param_space['min_child_weight']),
+                'reg_lambda': trial.suggest_float('reg_lambda', *param_space['reg_lambda']),
+                'reg_alpha': trial.suggest_float('reg_alpha', *param_space['reg_alpha']),
+                'subsample': trial.suggest_float('subsample', *param_space['subsample']),
+                'colsample_bytree': trial.suggest_float('colsample_bytree', *param_space['colsample_bytree']),
+                'learning_rate': trial.suggest_float('learning_rate', *param_space['learning_rate']),
+                'n_estimators': trial.suggest_int('n_estimators', *param_space['n_estimators']),
+            }
+
+            model = XGBClassifier(
+                **params,
+                random_state=self.config['run']['random_state'],
+                eval_metric=self.config['model']['hyperparameters']['eval_metric'],
+                early_stopping_rounds=self.config['model']['hyperparameters']['regularisation']['early_stopping_rounds'],
+                scale_pos_weight=self.config['model']['hyperparameters']['scale_pos_weight'],
+            )
+
+            model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
+
+            y_proba = model.predict_proba(X_val)[:, 1]
+            result = self.threshold(y_val, y_proba)
+
+            r = result['recall']
+            p = result['precision']
+            f1 = result['f1']
+
+            print(roc_auc_score(y_val, y_proba))
+            print(r)
+
+            #if r < constraints['recall_min'] or p < constraints['precision_min'] or f1 < constraints['f1_min']:
+             #   return 0.0
+
+            if r < constraints['recall_min'] and f1 < constraints['f1_min']:
+                return 0.0
+            return f1
+
+        study = optuna.create_study(direction='maximize')
+        study.optimize(objective, n_trials=n_trials)
+
+        # Refit avec les meilleurs params
+        best_model = XGBClassifier(
+            **study.best_params,
+            random_state=self.config['run']['random_state'],
+            eval_metric=self.config['model']['hyperparameters']['eval_metric'],
+            early_stopping_rounds=self.config['model']['hyperparameters']['regularisation']['early_stopping_rounds'],
+            scale_pos_weight=self.config['model']['hyperparameters']['scale_pos_weight'],
+        )
+
+        best_model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
+
+        return {
+            'best_estimator': best_model,
+            'best_params': study.best_params,
+        }
+
+
+
+
+
+
+
+
+
 
     def _load_data(self):
         run_id            = self.config['mlflow']['run_artifact_path']['run_id']

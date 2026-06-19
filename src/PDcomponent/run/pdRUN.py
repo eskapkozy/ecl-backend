@@ -27,7 +27,8 @@ import mlflow
 import numpy as np
 import yaml
 from matplotlib import pyplot as plt
-from sklearn.metrics import PrecisionRecallDisplay, RocCurveDisplay, recall_score, precision_score, f1_score
+from sklearn.metrics import PrecisionRecallDisplay, RocCurveDisplay, recall_score, precision_score, f1_score, \
+    make_scorer
 
 from src.runAbstraction import RunAbstraction
 from src.Utile.artifactManager import ArtifactType
@@ -37,8 +38,8 @@ from src.PDcomponent.pipelines.pdFeaturePipeline import PDFeaturePipeline
 class PDRun(RunAbstraction):
 
     def __init__(self, train_map: dict = None, test_map: dict = None,
-                 val_map: dict = None, config_path: str = None):
-        super().__init__(train_map, test_map, val_map, config_path)
+                 val_map: dict = None, config_path: str = None,test_path: str = None):
+        super().__init__(train_map, test_map, val_map, config_path,test_path)
 
         self.featurePipeline : PDFeaturePipeline = None
 
@@ -120,54 +121,89 @@ class PDRun(RunAbstraction):
         self._best_f1          = best_f1
 
     def save_evaluation_metrics(self, test_config_path: str):
-        """
-        Écrit les métriques du dernier run dans le fichier de config test.
-        À appeler manuellement après validation visuelle des métriques dans MLflow.
 
-        Usage :
-            run.run()
-            # → vérifier les métriques dans MLflow
-            run.save_pd_evaluation_metrics("configs/test_config.yaml")
-        """
         path = Path(test_config_path)
+
         with open(path, "r") as f:
             test_config = yaml.safe_load(f)
 
         test_config["evaluation"] = {
-            "roc_auc"             : True,
-            "recall"              : True,
-            "precision"           : True,
-            "f1_score"            : True,
-            "confusion_matrix"    : True,
-            "threshold"           : float(self._chosen_threshold),
-            "recall_threshold"    : float(self._best_recall),
-            "precision_threshold" : float(self._best_precision),
-            "f1_threshold"        : float(self._best_f1),
+            "threshold_result": {
+                "threshold": float(self._chosen_threshold)
+            },
+            "constraints_result": {
+                "recall": {
+                    "value": float(self._best_recall)
+                },
+                "f1": {
+                    "value": float(self._best_f1)
+                }
+            }
         }
 
         with open(path, "w") as f:
-            yaml.dump(test_config, f, default_flow_style=False, allow_unicode=True)
+            yaml.safe_dump(
+                test_config,
+                f,
+                sort_keys=False,
+                default_flow_style=False,  # IMPORTANT: format bloc YAML lisible
+                indent=2  # indentation propre et stable
+            )
 
-        print(f"Métriques sauvegardées dans {path}")
+    from sklearn.model_selection import GridSearchCV
+    from sklearn.metrics import make_scorer, recall_score, f1_score, precision_score
 
+    def _build_custom_scorer(self, constraints: dict):
+        recall_min = constraints.get('recall_min', 0.90)
+        f1_min = constraints.get('f1_min', 0.70)
+        precision_min = constraints.get('precision_min', 0.80)
+        threshold = constraints.get('threshold_provisoire', 0.50)
 
+        def custom_score(y_true, y_proba):
+            y_pred = (y_proba >= threshold).astype(int)
+            recall = recall_score(y_true, y_pred, zero_division=0)
+            f1 = f1_score(y_true, y_pred, zero_division=0)
+            precision = precision_score(y_true, y_pred, zero_division=0)
 
+            if recall < recall_min:    return 0.0
+            if f1 < f1_min:            return 0.0
+            if precision < precision_min: return 0.0
+
+            return f1  # on maximise f1 parmi les combinaisons valides
+
+        return make_scorer(custom_score, needs_proba=True)
+
+    @abstractmethod
+    def _run_grid_search(self, X_train, y_train):
+        raise NotImplementedError
 
     def threshold(self, y_data, y_proba):
-        threshold = np.arange(0.1, 0.99, 0.01)
-        best_recall = 0
+        threshold_config = self.config['evaluation']['threshold']
+
+        thresholds = np.arange(
+            threshold_config['search']['start'],
+            threshold_config['search']['stop'],
+            threshold_config['search']['step']
+        )
+
+        constraints = self.config['model']['grid_search']['constraints']
+        recall_min = constraints['recall_min']
+        f1_min = constraints['f1_min']
+        #precision_min = constraints['precision_min']
+
+        best_f1 = -1
         chosen_threshold = 0
         predicted_new = np.zeros_like(y_data)
-        best_f1 = -1
+        best_recall = 0
         best_precision = 0
 
-        for t in threshold:
+        for t in thresholds:
             y_pred = (y_proba >= t).astype(int)
-            r = recall_score(y_data, y_pred)
-            p = precision_score(y_data, y_pred)
-            f1 = f1_score(y_data, y_pred)
+            r = recall_score(y_data, y_pred, zero_division=0)
+            p = precision_score(y_data, y_pred, zero_division=0)
+            f1 = f1_score(y_data, y_pred, zero_division=0)
 
-            if r >= 0.90 and f1 > best_f1:
+            if r >= recall_min and f1 > best_f1:
                 best_f1 = f1
                 chosen_threshold = t
                 predicted_new = y_pred
@@ -179,23 +215,26 @@ class PDRun(RunAbstraction):
         self._best_precision = best_precision
         self._best_f1 = best_f1
 
-        return {'recall': best_recall, "precision": best_precision, "f1": best_f1,
-                "pred": predicted_new, "threshold": chosen_threshold}
-
-
-
+        return {
+            'recall': best_recall,
+            'precision': best_precision,
+            'f1': best_f1,
+            'pred': predicted_new,
+            'threshold': chosen_threshold
+        }
 
     def apply_threshold(self, y_data, y_proba):
-
         """
-            Appliquer le seuil est metrique trouver en train
+        Applique le seuil figé issu du train/validation.
+        Aucune recherche ici - le seuil est une contrainte fixe.
+        Les métriques sont recalculées sur les vraies prédictions.
         """
-
-        threshold = self.config['evaluation']['threshold']
-        recall = self.config['evaluation']['recall_threshold']
-        precision = self.config['evaluation']['precision_threshold']
-        f1 = self.config['evaluation']['f1_threshold']
+        threshold = self.config['evaluation']['threshold_result']['threshold']
 
         predicted_new = (y_proba >= threshold).astype(int)
+
+        recall = recall_score(y_data, predicted_new, zero_division=0)
+        precision = precision_score(y_data, predicted_new, zero_division=0)
+        f1 = f1_score(y_data, predicted_new, zero_division=0)
 
         return recall, precision, f1, predicted_new, threshold

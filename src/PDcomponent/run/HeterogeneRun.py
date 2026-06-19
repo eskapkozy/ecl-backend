@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import mlflow
 
 import optuna
-
+from sklearn import ensemble
 
 from sklearn.ensemble import RandomForestClassifier, StackingClassifier
 from sklearn.linear_model import LogisticRegression
@@ -27,105 +27,84 @@ from src.PDcomponent.run.pdRUN import PDRun
 
 class Heterogene(PDRun):
 
-    def __init__(self, train_map: dict = None, test_map: dict = None, val_map: dict = None, config_path: str = None):
-        super().__init__(train_map, test_map, val_map, config_path)
+    def __init__(self, train_map: dict = None, test_map: dict = None, val_map: dict = None, config_path: str = None,test_path: str = None):
+        super().__init__(train_map, test_map, val_map, config_path,test_path)
 
     def _run_train(self):
         # ########################
         # Train data transformation
-        # #######################
+        # ########################
 
         self.featurePipeline = PDFeaturePipeline(window_months=12, woe_config=self.config['woe'])
 
-        x_train_resampled, y_train_resampled = self.featurePipeline.apply_woe(self._x_train, self._y_train)
+        self.x_train_resampled, self.y_train_resampled = self.featurePipeline.apply_woe(self._x_train, self._y_train)
         binning_process = self.featurePipeline.binning_process
 
         # ########################
-        # Validation data transformation
-        # #######################
+        # Validation data transformation — pipeline dédié, pas réutilisation
+        # ########################
 
         y_val = self._y_val
 
-        pipeline_val = PDFeaturePipeline(window_months=12, woe_config=self.config['woe'],
-                                         binning_process=binning_process)
-        x_val_transformed, _ = self.featurePipeline.apply_woe(self._x_val)
+        pipeline_val = PDFeaturePipeline(
+            window_months=12,
+            woe_config=self.config['woe'],
+            binning_process=binning_process
+        )
+        x_val_transformed, _ = pipeline_val.apply_woe(self._x_val)
 
         # ########################
-        # Model Parametter
-        # #######################
+        # Model Parameters — tout vient de self.config
+        # ########################
 
-        # Tuning Optuna avant le fit final
-        best_params = self._tune(x_train_resampled, y_train_resampled, x_val_transformed, y_val)
-
-        # ─── 3. Construire l'ensemble ─────────────────────────────────────────
-
-        ensemble_pipeline = self._build_ensemble(y_train_resampled, params=best_params)
+        run_params = self.config['run']
 
 
-
-
+        # class weight — calculé dynamiquement à partir des données resampled
+        neg = (self.y_train_resampled == 0).sum()
+        pos = (self.y_train_resampled == 1).sum()
+        scale_pos_weight = neg / pos
 
         # ########################
         # Run
-        # #######################
+        # ########################
 
-        with mlflow.start_run(run_name=self.config['run']['name']) as run:
-            # model param log
-            mlflow.log_params(self.config['model'])
+        with mlflow.start_run(run_name=run_params['name']) as run:
+            # mlflow.log_param('random_state', random_state)
+            # mlflow.log_param('scale_pos_weight', scale_pos_weight)
 
-            # Fit — SMOTE est encapsulé dans le pipeline (appliqué par fold)
-            ensemble_pipeline.fit(x_train_resampled, y_train_resampled)
-            self.model_artifact = ensemble_pipeline
-
-            # Log optuna ici
-            mlflow.log_params({f"optuna_{k}": v for k, v in best_params.items() if not isinstance(v, dict)})
-
+            optimal_fit = self._run_grid_search(self.x_train_resampled, self.y_train_resampled, x_val_transformed,
+                                                y_val)
+            self._model_artifact = optimal_fit['best_estimator']
 
             # ########################
             # Validation Prediction
-            # #######################
+            # ########################
 
-            # ─── 5. Prédiction validation ─────────────────────────────────
-
-            y_proba = ensemble_pipeline.predict_proba(x_val_transformed)[:, 1]
-            print(np.percentile(y_proba, [10, 25, 50, 75, 90]))
+            y_proba = self._model_artifact.predict_proba(x_val_transformed)[:, 1]
 
             # ########################
-            # Metric  ( F1 - RECALL - ROC - AUC - GINI
-            # #######################
+            # Metrics
+            # ########################
 
-            # est-ce que le model discrimine bien ?
             roc_auc = roc_auc_score(y_val, y_proba)
             gini = 2 * roc_auc - 1
 
-            # On définit le seuil suivant les contraintes metier
             handeler = self.threshold(y_val, y_proba)
-            best_recall, best_precision, best_f1, predicted_new, chosen_threshold = handeler
-
-
             predicted_new = handeler['pred']
 
             confusion_mtx = confusion_matrix(y_val, predicted_new)
             tn, fp, fn, tp = confusion_mtx.ravel()
-
             accuracy = accuracy_score(y_val, predicted_new)
 
             recall = handeler['recall']
-
             precision = handeler['precision']
-
             f1 = handeler['f1']
 
-            # preparer le save des metrique d'evaluation
-            self._setEvaluationMetrics(
-                chosen_threshold=chosen_threshold, best_recall=best_recall,
-                best_precision=best_precision, best_f1=best_f1)
-
             # ########################
-            #  Log and Persiste
-            # #######################
+            # Log and Persist
+            # ########################
 
-            # metric log
             mlflow.log_metrics({
                 'chosen_threshold': handeler['threshold'],
                 'roc_auc': roc_auc,
@@ -138,14 +117,19 @@ class Heterogene(PDRun):
                 "false_positive": fp,
                 "false_negative": fn,
                 "true_positive": tp
-
             })
 
-            # model artefact  + pipline report
             self._log_model_artifact(self._model_artifact)
             self._log_feature_artifact(self.featurePipeline)
             self._log_roc_curve(y_data=y_val, y_proba=y_proba)
             self._log_precision_recall_curve(y_data=y_val, y_proba=y_proba)
+
+            # log model hyerparamettre
+            # mlflow.log_params(self.config['model'])
+            mlflow.log_params(optimal_fit['best_params'])
+
+            if self.test_path is not None:
+                self.save_evaluation_metrics(self.test_path)
 
         return None
 
@@ -262,27 +246,32 @@ class Heterogene(PDRun):
         # Optimisation d'hyperparamettre
         # #########################################
 
-    def _tune(self, x_train, y_train, x_val, y_val) -> dict:
+    def _run_grid_search(self, x_train, y_train, x_val, y_val) -> dict:
+        grid_cfg = self.config['model']['grid_search']
+        constraints = grid_cfg['constraints']
+        param_space = grid_cfg['param_space']
+        n_trials = grid_cfg.get('n_trials', 15)
+
         def objective(trial):
             params = {
                 "lgbm": {
-                    "n_estimators": trial.suggest_int("lgbm_n_est", 200, 800),
-                    "learning_rate": trial.suggest_float("lgbm_lr", 0.01, 0.1, log=True),
-                    "num_leaves": trial.suggest_int("lgbm_leaves", 31, 127),
+                    "n_estimators": trial.suggest_int("lgbm_n_estimators", *param_space['lgbm']['n_estimators']),
+                    "learning_rate": trial.suggest_float("lgbm_learning_rate", *param_space['lgbm']['learning_rate'],
+                                                         log=True),
+                    "num_leaves": trial.suggest_int("lgbm_num_leaves", *param_space['lgbm']['num_leaves']),
                 },
                 "xgb": {
-                    "n_estimators": trial.suggest_int("xgb_n_est", 200, 800),
-                    "learning_rate": trial.suggest_float("xgb_lr", 0.01, 0.1, log=True),
-                    "max_depth": trial.suggest_int("xgb_depth", 3, 8),
+                    "n_estimators": trial.suggest_int("xgb_n_estimators", *param_space['xgb']['n_estimators']),
+                    "learning_rate": trial.suggest_float("xgb_learning_rate", *param_space['xgb']['learning_rate'],
+                                                         log=True),
+                    "max_depth": trial.suggest_int("xgb_max_depth", *param_space['xgb']['max_depth']),
                 },
                 "meta": {
-                    "C": trial.suggest_float("meta_C", 0.01, 10, log=True),
-                    "w1": trial.suggest_int("meta_w1", 1, 15),
+                    "C": trial.suggest_float("meta_C", *param_space['meta']['C'], log=True),
                 }
             }
 
-            # Merge avec le configs de base
-
+            # Merge avec le config de base (subsample/colsample fixes, non tunés)
             trial_config = copy.deepcopy(self.config)
             trial_config["model"]["hyperparameters"]["lgbm"].update(params["lgbm"])
             trial_config["model"]["hyperparameters"]["xgb"].update(params["xgb"])
@@ -292,48 +281,58 @@ class Heterogene(PDRun):
             ensemble = self._build_ensemble(y_train, params=trial_config["model"]["hyperparameters"])
             ensemble.fit(x_train, y_train)
 
-            # Évaluation
+            # Évaluation sur validation
             y_proba = ensemble.predict_proba(x_val)[:, 1]
-            recall, _, f1, _, _ = self.threshold(y_val, y_proba)
+            result = self.threshold(y_val, y_proba)
 
-            # Contrainte métier
-            if recall < 0.90:
+            r = result['recall']
+            f1 = result['f1']
+
+            if r < constraints['recall_min'] and f1 < constraints['f1_min']:
                 return 0.0
 
             return f1
 
-        # Supprimer les logs verbeux d'Optuna
         optuna.logging.set_verbosity(optuna.logging.WARNING)
 
         study = optuna.create_study(direction="maximize")
-        study.optimize(objective, n_trials=self.config["model"].get("optuna_trials", 30))
+        study.optimize(objective, n_trials=n_trials)
 
         best = study.best_params
-        return {
+        hp = self.config["model"]["hyperparameters"]
+
+        best_hp= {
             "lgbm": {
-                "n_estimators": best["lgbm_n_est"],
-                "learning_rate": best["lgbm_lr"],
-                "num_leaves": best["lgbm_leaves"],
-                "subsample": self.config["model"]["hyperparameters"]["lgbm"]["subsample"],
-                "colsample_bytree": self.config["model"]["hyperparameters"]["lgbm"]["colsample_bytree"],
+                "n_estimators": best["lgbm_n_estimators"],
+                "learning_rate": best["lgbm_learning_rate"],
+                "num_leaves": best["lgbm_num_leaves"],
+                "subsample": hp["lgbm"]["subsample"],
+                "colsample_bytree": hp["lgbm"]["colsample_bytree"],
             },
             "xgb": {
-                "n_estimators": best["xgb_n_est"],
-                "learning_rate": best["xgb_lr"],
-                "max_depth": best["xgb_depth"],
-                "subsample": self.config["model"]["hyperparameters"]["xgb"]["subsample"],
-                "colsample_bytree": self.config["model"]["hyperparameters"]["xgb"]["colsample_bytree"],
+                "n_estimators": best["xgb_n_estimators"],
+                "learning_rate": best["xgb_learning_rate"],
+                "max_depth": best["xgb_max_depth"],
+                "subsample": hp["xgb"]["subsample"],
+                "colsample_bytree": hp["xgb"]["colsample_bytree"],
             },
-            "rf": self.config["model"]["hyperparameters"]["rf"],
-            "lr": self.config["model"]["hyperparameters"]["lr"],
-            "svm": self.config["model"]["hyperparameters"]["svm"],
+            "rf": hp["rf"],
+            "lr": hp["lr"],
+            "svm": hp["svm"],
             "meta": {
                 "C": best["meta_C"],
             },
-            "stacking_cv_folds": self.config["model"]["hyperparameters"].get("stacking_cv_folds", 5),
-            "passthrough": self.config["model"]["hyperparameters"].get("passthrough", False),
-            "calibration_cv": self.config["model"]["hyperparameters"].get("calibration_cv", 5),
+            "stacking_cv_folds": hp.get("stacking_cv_folds", 5),
+            "passthrough": hp.get("passthrough", False),
+            "calibration_cv": hp.get("calibration_cv", 5),
         }
+
+
+        return {
+            "best_estimator": ensemble,
+            "best_params": best_hp
+        }
+
 
 
 
@@ -447,6 +446,7 @@ class Heterogene(PDRun):
             accuracy = accuracy_score(y_test, predicted_new)
 
             mlflow.log_metrics({
+                'threshold': threshold,
                 'roc_auc': roc_auc,
                 'gini': gini,
                 'f1': f1,

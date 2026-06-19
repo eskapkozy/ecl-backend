@@ -38,8 +38,9 @@ from src.Utile.artifactManager import ArtifactManager, ArtifactType
 class RunAbstraction(ABC):
 
     def __init__(self, train_map: dict = None, test_map: dict = None,
-                 val_map: dict = None, config_path: str = None):
+                 val_map: dict = None, config_path: str = None,test_path: str = None):
 
+        self.test_path = test_path
         self.config_path = config_path
         self.config       = self._get_config()
         self._is_train    = self.config["run"]["is_train"]
@@ -65,8 +66,12 @@ class RunAbstraction(ABC):
         self._model_artifact = None
         self._artifact_manager = ArtifactManager()
 
+        self.x_train_resampled = None
+        self.y_train_resampled = None
 
-    # ------------------------------------------------------------------
+
+
+        # ------------------------------------------------------------------
     # Contrat — à implémenter par les sous-classes concrètes
     # ------------------------------------------------------------------
 
@@ -93,6 +98,19 @@ class RunAbstraction(ABC):
         if self._is_train:
             return self._run_train()
         return self._run_test()
+
+    # ------------------------------------------------------------------
+    # Evaluation & Hyperparamettre
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    def _build_custom_scorer(self, constraints: dict):
+        raise NotImplementedError
+
+    @abstractmethod
+    def _run_grid_search(self, X_train, y_train):
+        raise NotImplementedError
+
 
     # ------------------------------------------------------------------
     # Configuration

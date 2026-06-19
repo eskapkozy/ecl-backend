@@ -1,22 +1,35 @@
 run:
   name: "ensemble_heterogene Train"
-
   version: 1
   random_state: 42
   is_train: true
 
-
 model:
   type: "stacking_heterogeneous"
+
+  grid_search:
+    n_trials: 15
+    constraints:
+      recall_min: 0.90
+      f1_min: 0.15
+    param_space:
+      lgbm:
+        n_estimators:     [100, 500]
+        learning_rate:    [0.01, 0.1]
+        num_leaves:       [20, 100]
+      xgb:
+        n_estimators:     [100, 500]
+        learning_rate:    [0.01, 0.1]
+        max_depth:        [3, 7]
+      meta:
+        C:                [0.01, 10]
+
   hyperparameters:
+    stacking_cv_folds: 5
+    passthrough: false
+    calibration_cv: 5
+    smote_sampling_strategy: 0.3
 
-    # ── Stacking ──────────────────────────────────────────────────────────────
-    stacking_cv_folds: 5          # folds OOF pour générer les meta-features
-    passthrough: false            # true = passer les features brutes au méta-learner
-    calibration_cv: 5             # folds pour CalibratedClassifierCV
-    smote_sampling_strategy: 0.3  # ratio minoritaire cible après SMOTE
-
-    # ── LightGBM ──────────────────────────────────────────────────────────────
     lgbm:
       n_estimators: 500
       learning_rate: 0.05
@@ -24,7 +37,6 @@ model:
       subsample: 0.8
       colsample_bytree: 0.8
 
-    # ── XGBoost ───────────────────────────────────────────────────────────────
     xgb:
       n_estimators: 500
       learning_rate: 0.05
@@ -32,24 +44,19 @@ model:
       subsample: 0.8
       colsample_bytree: 0.8
 
-    # ── Random Forest ─────────────────────────────────────────────────────────
     rf:
       n_estimators: 300
       max_features: "sqrt"
 
-    # ── Logistic Regression (base) ────────────────────────────────────────────
     lr:
       C: 1.0
 
-    # ── SVM ───────────────────────────────────────────────────────────────────
     svm:
       C: 1.0
 
-    # ── Méta-learner (LogReg L2) ──────────────────────────────────────────────
     meta:
       C: 0.1
 
-# ── Feature pipeline ──────────────────────────────────────────────────────────
 woe:
   enabled: true
   iv_threshold: 0.02
@@ -65,40 +72,43 @@ correlation:
   enabled: true
   threshold: 0.8
 
-# Evaluation & Metrics
-
 evaluation:
   roc_auc: true
   recall: true
   precision: true
   f1_score: true
   confusion_matrix: true
-
-
-# Livrable ( Artifacts , Reports , Plot )
+  threshold:
+    enabled: true
+    search:
+      start: 0.10
+      stop: 0.99
+      step: 0.01
+    constraints:
+      recall_min: 0.90
+    objective:
+      primary_metric: "f1"
+      direction: "maximize"
+    defaults:
+      threshold: 0.25
 
 artifacts:
   log_model: true
   log_woe: true
   log_reports: true
 
-
 mlflow:
   tracking_uri: "http://localhost:5000"
   experiment_name: "classification"
-
-  # Artifact path
   run_artifact_path:
-
-    run_id: #"802e3adb80994db584fb17d8ec0eeb77"
+    run_id: ""
     binning_process:
       name: "binning_process"
       path: "binning_process"
       artifact_type: "PKL"
       ismodel: false
-
     model_fit:
       name: "model_fit"
       path: "model_fit"
       artifact_type: "PKL"
-      ismodel: false
+      ismodel: true

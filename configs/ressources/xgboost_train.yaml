@@ -4,10 +4,12 @@ run:
   random_state: 42
   is_train: true
 
-# Model
 model:
   name: "Xgboost"
+
+
   hyperparameters:
+    eval_metric: "logloss"
     regularisation:
       max_depth: 4
       min_child_weight: 5
@@ -16,13 +18,26 @@ model:
       subsample: 0.8
       colsample_bytree: 0.8
       learning_rate: 0.1
+      early_stopping_rounds: 10
     n_estimators: 1000
-    early_stopping_rounds: 10
-    eval_metric: "logloss"
-    # scale_pos_weight n'est pas fixé ici — calculé dynamiquement
-    # dans XGBoostRun à partir du ratio neg/pos de y_train_resampled
+    scale_pos_weight: 1
 
-# Component
+  grid_search:
+    n_trials: 15
+    constraints:
+      recall_min: 0.80
+      f1_min: 0.20
+      precision_min: 0.80
+    param_space:
+      max_depth:        [3, 7]
+      min_child_weight: [1, 5]
+      reg_lambda:       [1, 10]
+      reg_alpha:        [0, 1]
+      subsample:        [0.7, 0.9]
+      colsample_bytree: [0.7, 0.9]
+      learning_rate:    [0.01, 0.1]
+      n_estimators:     [100, 500]
+      scale_pos_weight: [1, 5, 10, 50]
 
 woe:
   enabled: true
@@ -39,36 +54,38 @@ correlation:
   enabled: true
   threshold: 0.8
 
-# Evaluation & Metrics
-
 evaluation:
   roc_auc: true
   recall: true
   precision: true
   f1_score: true
   confusion_matrix: true
-
-# Stack used
+  threshold:
+    search:
+      start: 0.10
+      stop: 0.99
+      step: 0.01
+    constraints:
+      recall_min: 0.90
+      f1_min: 0.70
+      precision_min: 0.80
 
 mlflow:
   tracking_uri: "http://localhost:5000"
   experiment_name: "classification"
-
-  # Artifact path
   run_artifact_path:
-    run_id:
+    run_id: ""
     binning_process:
-      name:
-      path:
-      artifact_type:
+      name: "binning_process"
+      path: "binning_process"
+      artifact_type: "PKL"
       ismodel: false
     model_fit:
-      name:
-      path:
-      artifact_type:
+      name: "model_fit"
+      path: "model_fit"
+      artifact_type: "PKL"
       ismodel: false
 
-# Livrable (Artifacts, Reports, Plot)
 artifacts:
   log_model: true
   log_woe: true
