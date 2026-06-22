@@ -51,6 +51,10 @@ model:
     scale_pos_weight: 1
     eval_metric: "binary_logloss"
 
+  calibration:
+    enabled: true
+    method: "sigmoid"
+    cv: "prefit"
 
 
 
@@ -85,19 +89,22 @@ evaluation:
   confusion_matrix: true
 
   threshold:
-
+    fixed_value: 0.22
     enabled: true
 
     # génération des seuils
     search:
-      start: 0.10
-      stop: 0.99
-      step: 0.01
+      start: 1
+      stop: 100
+      step: 1
 
     # contraintes de sélection
     constraints:
 
-      recall_min: 0.90
+      recall_min: 0.80
+      f1_min: 0.15
+      precision_min: 0.20
+
 
     # stratégie d'optimisation
     objective:

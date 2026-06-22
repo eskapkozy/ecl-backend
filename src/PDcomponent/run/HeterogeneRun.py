@@ -144,18 +144,9 @@ class Heterogene(PDRun):
 
     def _build_ensemble(self, y_train_resampled, params=None):
         """
-        Construit le pipeline d'ensemble complet.
-
-        Notes de design :
-        - SMOTE est passé DANS le ImbPipeline pour qu'il ne s'applique
-          qu'aux folds d'entraînement lors du stacking OOF (pas de leakage).
-        - Chaque base learner est enveloppé dans CalibratedClassifierCV
-          pour homogénéiser les probabilités avant le méta-learner.
-        - Le méta-learner reçoit uniquement les probas OOF (passthrough=False).
+        LGBM + LR uniquement (XGB et SVM retirés temporairement pour diagnostic perf).
         """
         hp = params if params is not None else self.config["model"]["hyperparameters"]
-
-        # ── Base learners ────────────────────────────────────────────────────
 
         lgbm = lgb.LGBMClassifier(
             n_estimators=hp["lgbm"]["n_estimators"],
@@ -169,48 +160,17 @@ class Heterogene(PDRun):
             verbose=-1,
         )
 
-        xgb_clf = xgb.XGBClassifier(
-            n_estimators=hp["xgb"]["n_estimators"],
-            learning_rate=hp["xgb"]["learning_rate"],
-            max_depth=hp["xgb"]["max_depth"],
-            subsample=hp["xgb"]["subsample"],
-            colsample_bytree=hp["xgb"]["colsample_bytree"],
-            eval_metric="logloss",
-            scale_pos_weight=self._compute_scale_pos_weight(y_train_resampled),
-            random_state=42,
-            n_jobs=-1,
+        lr_pipeline = LogisticRegression(
+            C=hp["lr"]["C"], class_weight="balanced",
+            solver="saga", max_iter=1000, random_state=42
         )
-
-        rf = RandomForestClassifier(
-            n_estimators=hp["rf"]["n_estimators"],
-            max_features=hp["rf"].get("max_features", "sqrt"),
-            class_weight="balanced",
-            random_state=42,
-            n_jobs=-1,
-        )
-
-        # Après
-
-        # LR + SVM nécessitent une mise à l'échelle
-        lr_pipeline = LogisticRegression(C=hp["lr"]["C"], class_weight="balanced",
-                                         solver="saga", max_iter=1000, random_state=42)
-
-        svm_pipeline = SVC(C=hp["svm"]["C"], kernel="rbf", gamma="scale",
-                           probability=True, class_weight="balanced", random_state=42)
-
-        # ── Calibration isotonic ─────────────────────────────────────────────
 
         n_cv_calib = hp.get("calibration_cv", 5)
 
         base_learners = [
             ("lgbm", CalibratedClassifierCV(lgbm, method="isotonic", cv=n_cv_calib)),
-            ("xgb", CalibratedClassifierCV(xgb_clf, method="isotonic", cv=n_cv_calib)),
-            ("rf", CalibratedClassifierCV(rf, method="isotonic", cv=n_cv_calib)),
-            ("lr", lr_pipeline),  # LogReg est nativement calibré
-            ("svm", svm_pipeline),
+            ("lr", lr_pipeline),
         ]
-
-        # ── Méta-learner ─────────────────────────────────────────────────────
 
         meta_learner = LogisticRegression(
             C=hp["meta"]["C"],
@@ -232,10 +192,6 @@ class Heterogene(PDRun):
             passthrough=hp.get("passthrough", False),
             n_jobs=-1,
         )
-
-        # ── Pipeline final avec SMOTE ─────────────────────────────────────────
-
-        smote_ratio = hp.get("smote_sampling_strategy", 0.3)
 
         return stacking
 

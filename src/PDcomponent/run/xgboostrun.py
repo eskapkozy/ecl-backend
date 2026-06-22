@@ -1,9 +1,8 @@
-import numpy as np
+
 import optuna
+from sklearn.calibration import CalibratedClassifierCV
 
-from sklearn.model_selection import GridSearchCV
 
-from src.Utile.artifactManager import ArtifactType
 import mlflow
 from xgboost import XGBClassifier
 
@@ -46,13 +45,7 @@ class XGBoostRun(PDRun):
         # ########################
 
         run_params       = self.config['run']
-        #hyperparameters  = self.config['model']['hyperparameters']
-        #regularisation   = hyperparameters['regularisation']
 
-        #random_state           = run_params['random_state']
-        #early_stopping_rounds  = regularisation['early_stopping_rounds']
-        #eval_metric            = hyperparameters['eval_metric']
-        #n_estimators            = hyperparameters['n_estimators']
 
         # class weight — calculé dynamiquement à partir des données resampled
         neg = (self.y_train_resampled == 0).sum()
@@ -65,13 +58,26 @@ class XGBoostRun(PDRun):
 
         with mlflow.start_run(run_name=run_params['name']) as run:
 
-            #mlflow.log_param('random_state', random_state)
-            #mlflow.log_param('scale_pos_weight', scale_pos_weight)
+
 
             optimal_fit = self._run_grid_search(self.x_train_resampled, self.y_train_resampled,x_val_transformed, y_val)
             self._model_artifact = optimal_fit['best_estimator']
 
+            # ########################
+            # Calibration
+            # ########################
 
+            calibration_method = self.config['model'].get('calibration', {}).get('method', 'isotonic')
+            calibration_CV = self.config['model'].get('calibration', {}).get('cv', 'prefit')
+
+            calibrated_model = CalibratedClassifierCV(
+                estimator=self._model_artifact,
+                method=calibration_method,
+                cv=calibration_CV
+            )
+            calibrated_model.fit(x_val_transformed, y_val)
+
+            self._model_artifact = calibrated_model  # remplace le modèle brut par le modèle calibré
 
 
             # ########################
@@ -104,6 +110,7 @@ class XGBoostRun(PDRun):
 
             mlflow.log_metrics({
                 'chosen_threshold': handeler['threshold'],
+                'chosen_percentile': handeler['percentile'],
                 'roc_auc': roc_auc,
                 'gini': gini,
                 'f1': f1,
@@ -116,10 +123,13 @@ class XGBoostRun(PDRun):
                 "true_positive": tp
             })
 
+            mlflow.log_params({'calibration_method': calibration_method})
+
             self._log_model_artifact(self._model_artifact)
             self._log_feature_artifact(self.featurePipeline)
             self._log_roc_curve(y_data=y_val, y_proba=y_proba)
             self._log_precision_recall_curve(y_data=y_val, y_proba=y_proba)
+            self._log_calibration_curve(y_data=y_val, y_proba=y_proba)
 
             # log model hyerparamettre
             #mlflow.log_params(self.config['model'])
@@ -127,8 +137,10 @@ class XGBoostRun(PDRun):
 
             if self.test_path is not None:
                 self.save_evaluation_metrics(self.test_path)
-
+            self.y_proba = y_proba
         return None
+
+
 
     def _run_test(self):
         # ########################
@@ -155,7 +167,7 @@ class XGBoostRun(PDRun):
         # ########################
 
         with mlflow.start_run(run_name=self.config['run']['name']):
-            mlflow.log_params(self.config['model'])
+
 
             y_prob = model_fit.predict_proba(x_transformed)[:, 1]
 
@@ -184,8 +196,13 @@ class XGBoostRun(PDRun):
 
             self._log_roc_curve(y_test, y_prob)
             self._log_precision_recall_curve(y_test, y_prob)
+            mlflow.log_params(self.config['model'])
+
+            self.y_proba = y_prob
 
         return None
+
+
 
     def _run_grid_search(self, X_train, y_train, X_val, y_val):
         grid_cfg = self.config['model']['grid_search']
@@ -222,8 +239,14 @@ class XGBoostRun(PDRun):
             p = result['precision']
             f1 = result['f1']
 
-            print(roc_auc_score(y_val, y_proba))
-            print(r)
+            print('threshold', result['threshold'])
+            print('roc_auc_score', roc_auc_score(y_val, y_proba))
+            print('recall',r)
+            print('f1',f1)
+            print('precision',p)
+
+
+
 
             #if r < constraints['recall_min'] or p < constraints['precision_min'] or f1 < constraints['f1_min']:
              #   return 0.0

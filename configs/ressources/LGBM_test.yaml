@@ -33,17 +33,17 @@ correlation:
   threshold: 0.8
 evaluation:
   threshold_result:
-    threshold: 0.2699999999999999
+    threshold: 0.029299283465647707
   constraints_result:
     recall:
-      value: 0.9003281014454199
+      value: 0.804380597676687
     f1:
-      value: 0.14604955586722768
+      value: 0.18497710982187465
 mlflow:
   tracking_uri: http://localhost:5000
   experiment_name: classification
   run_artifact_path:
-    run_id: 7364acfa28894370b7c5ab202c871cef
+    run_id: c66426c3430e4979b101380be824c502
     binning_process:
       name: binning_process
       path: binning_process

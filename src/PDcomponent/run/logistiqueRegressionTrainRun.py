@@ -1,4 +1,5 @@
 import optuna
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import GridSearchCV
 
 
@@ -27,6 +28,8 @@ class LogistiqueRegressionTrainRun(PDRun):
 
         self.x_train_resampled, self.y_train_resampled = self.featurePipeline.apply_woe(self._x_train, self._y_train)
         binning_process = self.featurePipeline.binning_process
+
+
 
 
 
@@ -78,8 +81,21 @@ class LogistiqueRegressionTrainRun(PDRun):
             optimal_fit = self._run_grid_search(self.x_train_resampled, self.y_train_resampled,x_val_transformed,y_val)
             self._model_artifact = optimal_fit['best_estimator']
 
+            # ########################
+            # Calibration
+            # ########################
 
+            calibration_method = self.config['model'].get('calibration', {}).get('method', 'isotonic')
+            calibration_CV = self.config['model'].get('calibration', {}).get('cv', 'prefit')
 
+            calibrated_model = CalibratedClassifierCV(
+                estimator=self._model_artifact,
+                method=calibration_method,
+                cv=calibration_CV
+            )
+            calibrated_model.fit(x_val_transformed, y_val)
+
+            self._model_artifact = calibrated_model  # remplace le modèle brut par le modèle calibré
 
             #model = LogisticRegression(max_iter=max_iter, class_weight=class_weight, penalty=penalty, solver=solver, C=C, tol=tol)
             #self._model_artifact = model.fit(x_train_resampled, y_train_resampled)
@@ -123,6 +139,7 @@ class LogistiqueRegressionTrainRun(PDRun):
             # metric log
             mlflow.log_metrics({
                 'chosen_threshold': handeler['threshold'],
+                'chosen_percentile': handeler['percentile'],
                 'roc_auc': roc_auc,
                 'gini': gini,
                 'f1': f1,
@@ -136,6 +153,8 @@ class LogistiqueRegressionTrainRun(PDRun):
 
             })
 
+            mlflow.log_params({'calibration_method': calibration_method})
+
             # model artefact  + pipline report
             self._log_model_artifact(self._model_artifact)
             self._log_feature_artifact(self.featurePipeline)
@@ -147,6 +166,7 @@ class LogistiqueRegressionTrainRun(PDRun):
             if self.test_path is not None:
                 self.save_evaluation_metrics(self.test_path)
 
+            self.y_proba = y_proba
         return None
 
 
@@ -208,6 +228,8 @@ class LogistiqueRegressionTrainRun(PDRun):
 
             self._log_roc_curve(y_test, y_prob)
             self._log_precision_recall_curve(y_test, y_prob)
+
+            self.y_proba = y_prob
 
         return None
 

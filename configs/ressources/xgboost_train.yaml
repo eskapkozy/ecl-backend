@@ -39,6 +39,11 @@ model:
       n_estimators:     [100, 500]
       scale_pos_weight: [1, 5, 10, 50]
 
+  calibration:
+    enabled: true
+    method: "isotonic"   # ou "sigmoid"
+    cv: "prefit"          # le modèle est déjà fitté sur train
+
 woe:
   enabled: true
   iv_threshold: 0.02
@@ -62,13 +67,13 @@ evaluation:
   confusion_matrix: true
   threshold:
     search:
-      start: 0.10
-      stop: 0.99
-      step: 0.01
+      start: 1
+      stop: 100
+      step: 1
     constraints:
-      recall_min: 0.90
-      f1_min: 0.70
-      precision_min: 0.80
+      recall_min: 0.80
+      f1_min: 0.30
+      precision_min: 0.20
 
 mlflow:
   tracking_uri: "http://localhost:5000"
