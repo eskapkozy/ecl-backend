@@ -1,0 +1,97 @@
+run:
+  name: "Xgboost Train"
+  version: 1
+  random_state: 42
+  is_train: true
+
+model:
+  name: "Xgboost"
+
+
+  hyperparameters:
+    eval_metric: "logloss"
+    regularisation:
+      max_depth: 4
+      min_child_weight: 5
+      reg_lambda: 1.0
+      reg_alpha: 0.1
+      subsample: 0.8
+      colsample_bytree: 0.8
+      learning_rate: 0.1
+      early_stopping_rounds: 10
+    n_estimators: 1000
+    scale_pos_weight: 1
+
+  grid_search:
+    n_trials: 15
+    constraints:
+      recall_min: 0.80
+      f1_min: 0.20
+      precision_min: 0.80
+    param_space:
+      max_depth:        [3, 7]
+      min_child_weight: [1, 5]
+      reg_lambda:       [1, 10]
+      reg_alpha:        [0, 1]
+      subsample:        [0.7, 0.9]
+      colsample_bytree: [0.7, 0.9]
+      learning_rate:    [0.01, 0.1]
+      n_estimators:     [100, 500]
+      scale_pos_weight: [1, 5, 10, 50]
+
+  calibration:
+    enabled: true
+    method: "isotonic"   # ou "sigmoid"
+    cv: "prefit"          # le modèle est déjà fitté sur train
+
+woe:
+  enabled: true
+  iv_threshold: 0.02
+  metric: "woe"
+  persistence: false
+
+smote:
+  enabled: true
+  sampling_strategy: "auto"
+  random_state: 42
+
+correlation:
+  enabled: true
+  threshold: 0.8
+
+evaluation:
+  roc_auc: true
+  recall: true
+  precision: true
+  f1_score: true
+  confusion_matrix: true
+  threshold:
+    search:
+      start: 1
+      stop: 100
+      step: 1
+    constraints:
+      recall_min: 0.80
+      f1_min: 0.30
+      precision_min: 0.20
+
+mlflow:
+  tracking_uri: "http://localhost:5000"
+  experiment_name: "classification"
+  run_artifact_path:
+    run_id: ""
+    binning_process:
+      name: "binning_process"
+      path: "binning_process"
+      artifact_type: "PKL"
+      ismodel: false
+    model_fit:
+      name: "model_fit"
+      path: "model_fit"
+      artifact_type: "PKL"
+      ismodel: false
+
+artifacts:
+  log_model: true
+  log_woe: true
+  log_reports: true

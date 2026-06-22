@@ -1,0 +1,76 @@
+run:
+  name: Logistique Regression Test
+  version: 1
+  random_state: 42
+  is_train: false
+model:
+  name: logistic_regression
+  grid_search:
+    cv: 5
+    param_grid:
+      C:
+      - 0.01
+      - 0.1
+      - 1
+      - 10
+      max_iter:
+      - 100
+      - 300
+      penalty:
+      - l1
+      - l2
+      solver:
+      - saga
+    constraints:
+      recall_min: 0.9
+      f1_min: 0.7
+      precision_min: 0.8
+    threshold_provisoire: 0.5
+  hyperparameters:
+    regularisation:
+      C: 1.0
+      penalty: l2
+      tol: 0.0001
+      random_state: 42
+    max_iter: 1000
+    solver: lbfgs
+    class_weight: balanced
+woe:
+  enabled: true
+  iv_threshold: 0.02
+  metric: woe
+  persistence: false
+smote:
+  enabled: true
+  sampling_strategy: auto
+  random_state: 42
+correlation:
+  enabled: true
+  threshold: 0.8
+evaluation:
+  threshold_result:
+    threshold: 0.0356131793313626
+  constraints_result:
+    recall:
+      value: 0.7834530460228785
+    f1:
+      value: 0.16866158868335146
+mlflow:
+  tracking_uri: http://localhost:5000
+  experiment_name: classification
+  run_artifact_path:
+    run_id: 60ace8b1afc2486b95969790f61c8ba6
+    binning_process:
+      name: binning_process
+      path: binning_process
+      artifact_type: PKL
+      ismodel: false
+    model_fit:
+      name: model_fit
+      path: model_fit
+      artifact_type: PKL
+      ismodel: false
+artifacts:
+  log_model: true
+  log_woe: true
+  log_reports: false

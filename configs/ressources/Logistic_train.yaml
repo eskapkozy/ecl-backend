@@ -1,0 +1,116 @@
+run:
+  name: "Logistic regression Train"
+  version: 1
+  random_state: 42
+  is_train: true
+
+
+# Model
+
+model:
+  name: "logistic_regression"
+  grid_search:
+    n_trials: 15
+    constraints:
+      recall_min: 0.90
+      f1_min: 0.15
+    param_space:
+      C: [ 0.001, 100 ]
+      max_iter: [ 100, 1000 ]
+      penalty: [ l1, l2 ]
+      solver: [ saga, liblinear ]
+  hyperparameters:
+    regularisation:
+      C: 1.0
+      penalty: "l2"
+      tol: 0.0001
+      random_state: 42
+    max_iter: 1000
+    solver: "lbfgs"
+    class_weight: "balanced"
+  calibration:
+    enabled: true
+    method: "sigmoid"
+    cv: "prefit"
+
+# Component
+
+woe:
+  enabled: true
+  iv_threshold: 0.02
+  metric: "woe"
+  persistence: false
+
+smote:
+  enabled: true
+  sampling_strategy: "auto"
+  random_state: 42
+
+correlation:
+  enabled: true
+  threshold: 0.8
+
+# Evaluation & Metrics
+
+evaluation:
+  roc_auc: true
+  recall: true
+  precision: true
+  f1_score: true
+  confusion_matrix: true
+
+  threshold:
+    fixed_value: 0.22
+    enabled: true
+
+    # génération des seuils
+    search:
+      start: 1
+      stop: 100
+      step: 1
+
+    # contraintes de sélection
+    constraints:
+
+      recall_min: 0.78
+      f1_min: 0.15
+      precision_min: 0.20
+
+    # stratégie d'optimisation
+    objective:
+
+      primary_metric: "f1"
+      direction: "maximize"
+
+    # valeurs fallback
+    defaults:
+      threshold: 0.25
+
+# Techno Used
+
+mlflow:
+  tracking_uri: "http://localhost:5000"
+  experiment_name: "classification"
+
+
+  # Artifact path
+  run_artifact_path:
+    run_id:
+    binning_process:
+      name:
+      path:
+      artifact_type:
+      ismodel: false
+    model_fit:
+      name:
+      path:
+      artifact_type:
+      ismodel: false
+
+
+# Livrable ( Artifacts , Reports , Plot )
+
+artifacts:
+  log_model: true
+  log_woe: true
+  log_reports: true

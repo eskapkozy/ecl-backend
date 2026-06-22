@@ -1,0 +1,60 @@
+run:
+  name: lightgbm Test
+  version: 1
+  random_state: 42
+  is_train: false
+model:
+  name: lightgbm
+  hyperparameters:
+    regularisation:
+      max_depth: 4
+      min_child_samples: 20
+      reg_lambda: 1.0
+      reg_alpha: 0.1
+      subsample: 0.8
+      colsample_bytree: 0.8
+      learning_rate: 0.1
+      num_leaves: 15
+    n_estimators: 1000
+    early_stopping_rounds: 10
+    scale_pos_weight: 1
+    metric: binary_logloss
+woe:
+  enabled: true
+  iv_threshold: 0.02
+  metric: woe
+  persistence: false
+smote:
+  enabled: true
+  sampling_strategy: auto
+  random_state: 42
+correlation:
+  enabled: true
+  threshold: 0.8
+evaluation:
+  threshold_result:
+    threshold: 0.029299283465647707
+  constraints_result:
+    recall:
+      value: 0.804380597676687
+    f1:
+      value: 0.18497710982187465
+mlflow:
+  tracking_uri: http://localhost:5000
+  experiment_name: classification
+  run_artifact_path:
+    run_id: c66426c3430e4979b101380be824c502
+    binning_process:
+      name: binning_process
+      path: binning_process
+      artifact_type: PKL
+      ismodel: false
+    model_fit:
+      name: model_fit
+      path: model_fit
+      artifact_type: PKL
+      ismodel: false
+artifacts:
+  log_model: true
+  log_woe: true
+  log_reports: true
