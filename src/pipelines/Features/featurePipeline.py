@@ -34,6 +34,8 @@ class FeaturePipeline(ABC):
         self.selector       = FeatureSelector()
         self.state          = state
         self.target         = None
+
+        self.scaler_artifact = None
     # ------------------------------------------------------------------
     # Construction de la target — spécifique à chaque modèle
     # ------------------------------------------------------------------
@@ -100,7 +102,7 @@ class FeaturePipeline(ABC):
     # build() — features brutes scalées, AVANT split. Commun.
     # ------------------------------------------------------------------
 
-    def build(self, hist: pd.DataFrame, orig: pd.DataFrame):
+    def build(self, hist: pd.DataFrame, orig: pd.DataFrame,scaler: dict = None):
         """
         Mode train      : retourne (X, y)
         Mode inference   : retourne X seul
@@ -113,6 +115,13 @@ class FeaturePipeline(ABC):
         if self.state == "train":
             target_df = self._build_target(hist_12m)
             data      = data.merge(target_df, on="LOAN_SEQUENCE_NUMBER", how="inner")
-            return self.selector.fit_transform(data, target=self.target)
 
-        return self.selector.transform(data)
+            x,y = self.selector.fit_transform(data, target=self.target)
+
+            self.scaler_artifact = self.selector.artifact
+            return x,y
+
+
+
+
+        return self.selector.transform(data,scaler)

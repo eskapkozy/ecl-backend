@@ -91,6 +91,12 @@ mlflow:
       artifact_type: "PKL"
       ismodel: false
 
+    scaler:
+      artifact_type: "PKL"
+      ismodel: false
+      name: "scaler"
+      path: "scaler"
+
 artifacts:
   log_model: true
   log_woe: true

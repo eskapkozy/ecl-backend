@@ -51,9 +51,14 @@ class PDRun(RunAbstraction):
         self._best_f1          = None
 
         self.y_proba = None
+
     # ------------------------------------------------------------------
     # Contrat — toujours à implémenter par l'algorithme concret
     # ------------------------------------------------------------------
+
+    def setup(self, featurePipeline: PDFeaturePipeline):
+        self.featurePipeline = featurePipeline
+
 
     @abstractmethod
     def _load_data(self):
@@ -91,7 +96,17 @@ class PDRun(RunAbstraction):
             obj=woe_pipeline.selection_report(),
             name="corr_and_woe_selection_report",
             artifact_type=ArtifactType.JSON
+
+
         )
+
+        self._artifact_manager.log(
+            obj=feature_pipeline.selector.scaler_artifact,
+            name="scaler",
+            artifact_type=ArtifactType.PKL
+        )
+
+
 
     # ------------------------------------------------------------------
     # Figures — évaluation classification binaire

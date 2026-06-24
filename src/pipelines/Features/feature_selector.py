@@ -8,6 +8,7 @@ Optimisation : 2 appels sklearn au lieu de 19 (un par groupe de scaling).
 """
 
 import pandas as pd
+import logging
 import numpy as np
 from sklearn.preprocessing import StandardScaler, RobustScaler
 
@@ -53,27 +54,55 @@ class FeatureSelector:
         self.robust_scaler_   = RobustScaler()
         self.standard_scaler_ = StandardScaler()
 
+        self.artifact = None
+
+
+
     # ------------------------------------------------------------------
     # Fit + Transform
     # ------------------------------------------------------------------
 
     def fit_transform(self, df: pd.DataFrame, target: str) -> tuple:
+
+
+
+
         y = df[target].copy()
         X = df[self.features_].copy()
 
-        # 2 appels sklearn au lieu de 19
+
+        #
         X[self.robust_cols_]   = self.robust_scaler_.fit_transform(X[self.robust_cols_])
         X[self.standard_cols_] = self.standard_scaler_.fit_transform(X[self.standard_cols_])
 
+
+        # capture des artefacts du fit
+        self.artifacts = {
+            "robust_scaler": self.robust_scaler_,
+            "standard_scaler": self.standard_scaler_,
+            "features": self.features_,
+        }
+
+
         return X, y
 
-    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+    def transform(self, df: pd.DataFrame,scaler: dict) -> pd.DataFrame:
+
+
+        self._setScaler(scaler)
+
         X = df[self.features_].copy()
 
         X[self.robust_cols_]   = self.robust_scaler_.transform(X[self.robust_cols_])
         X[self.standard_cols_] = self.standard_scaler_.transform(X[self.standard_cols_])
 
+        # todo faire un load de l'artifavte du scaler
         return X
+
+    def _setScaler(self, scaler: dict):
+        self.robust_scaler_ = scaler["robust_scaler"]
+        self.standard_scaler_ = scaler["standard_scaler"]
+        self.features_ = scaler["features"]
 
     # ------------------------------------------------------------------
     # Rapport

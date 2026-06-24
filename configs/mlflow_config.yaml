@@ -1,0 +1,29 @@
+run_id: d6f7134e24004ad2939f364f4a2dd857
+
+#tracking_uri: "http://mlflow:5000"
+tracking_uri: "http://localhost:5000"
+experiment_name: "classification"
+
+binning_process:
+  artifact_type: "PKL"
+  ismodel: false
+  name: "binning_process"
+  path: "binning_process"
+
+model_fit:
+  artifact_type: "PKL"
+  ismodel: false
+  name: "ensemble_model"
+  path: "ensemble_model"
+
+stacking_weights:
+  artifact_type: "JSON"
+  ismodel: false
+  name: "stacking_weights"
+  path: "stacking_weights"
+
+scaler:
+  artifact_type: "PKL"
+  ismodel: false
+  name: "scaler"
+  path: "scaler"

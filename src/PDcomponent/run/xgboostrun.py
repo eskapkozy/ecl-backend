@@ -22,7 +22,10 @@ class XGBoostRun(PDRun):
         # Train data transformation
         # ########################
 
-        self.featurePipeline = PDFeaturePipeline(window_months=12, woe_config=self.config['woe'])
+        # Le setup a instaurer le feature pipeline, contenant les scaler artifact
+        # les donnee son dja sclaer avant d'applique woe
+
+        #self.featurePipeline = PDFeaturePipeline(window_months=12, woe_config=self.config['woe'])
 
         self.x_train_resampled, self.y_train_resampled = self.featurePipeline.apply_woe(self._x_train, self._y_train)
         binning_process = self.featurePipeline.binning_process
@@ -36,7 +39,7 @@ class XGBoostRun(PDRun):
         pipeline_val = PDFeaturePipeline(
             window_months=12,
             woe_config=self.config['woe'],
-            binning_process=binning_process
+            binning_process=binning_process # binnning appliquer au scale du train,
         )
         x_val_transformed, _ = pipeline_val.apply_woe(self._x_val)
 

@@ -76,6 +76,10 @@ class RunAbstraction(ABC):
     # ------------------------------------------------------------------
 
     @abstractmethod
+    def setup(self, featurePipeline):
+        raise NotImplementedError
+
+    @abstractmethod
     def _load_data(self):
         """Charge ou prépare les données nécessaires au run (hors maps déjà fournies)."""
         raise NotImplementedError
