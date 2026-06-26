@@ -20,6 +20,9 @@ from abc import ABC, abstractmethod
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 
+import select
+import yaml
+
 from pipelines.Features.window_builder        import WindowBuilder
 from pipelines.Features.delinquency_features  import DelinquencyFeatures
 from pipelines.Features.capital_features      import CapitalFeatures
@@ -29,13 +32,28 @@ from pipelines.Features.feature_selector      import FeatureSelector
 
 class FeaturePipeline(ABC):
 
-    def __init__(self, window_months: int = 12, state: str = "train"):
+    def __init__(self, window_months: int = 12, state: str = "train",
+               config_path: dict = None):
         self.window_months = window_months
-        self.selector       = FeatureSelector()
+
+        self.config_path = config_path
+
+
+        self.config = None
+        self.selector = None
+        if config_path is not None:
+            self.config = self._get_config()
+
+            self.selector = FeatureSelector(
+                scaler_logging_config=self.config['mlflow']['preprocessing']['scaler'],
+            )
+
+
         self.state          = state
         self.target         = None
 
         self.scaler_artifact = None
+        self.scaler_run_id = None
     # ------------------------------------------------------------------
     # Construction de la target — spécifique à chaque modèle
     # ------------------------------------------------------------------
@@ -70,33 +88,27 @@ class FeaturePipeline(ABC):
         """
         Retourne (data, hist_12m).
         Identique pour PD, LGD, EAD — fenêtre + retard + capital + origination.
+
+        Train      : WindowBuilder applique la fenêtre 12 mois.
+        Inférence  : hist est déjà fenêtré (12m Warehouse) — agrégation directe.
         """
-        n_loans = hist["LOAN_SEQUENCE_NUMBER"].nunique()
-        if n_loans == 1:
-            hist_12m = (
-                hist.sort_values("MONTHLY_REPORTING_PERIOD")
-                .tail(self.window_months)
-            )
-        else:
+        if self.state == "train":
             hist_12m = WindowBuilder(hist, window_months=self.window_months).build()
+        else:
+            hist_12m = hist
 
         with ThreadPoolExecutor(max_workers=3) as executor:
             f_delinquency = executor.submit(lambda: DelinquencyFeatures(hist_12m.copy()).build())
-            f_capital     = executor.submit(lambda: CapitalFeatures(hist_12m.copy(), orig_df=orig).build())
+            f_capital = executor.submit(lambda: CapitalFeatures(hist_12m.copy(), orig_df=orig).build())
             f_origination = executor.submit(lambda: OriginationFeatures(orig).build())
 
-        delinquency_agg = f_delinquency.result()
-        capital_agg     = f_capital.result()
-        orig_agg        = f_origination.result()
-
         data = (
-            delinquency_agg
-            .merge(capital_agg, on="LOAN_SEQUENCE_NUMBER", how="inner")
-            .merge(orig_agg,    on="LOAN_SEQUENCE_NUMBER", how="inner")
+            f_delinquency.result()
+            .merge(f_capital.result(), on="LOAN_SEQUENCE_NUMBER", how="inner")
+            .merge(f_origination.result(), on="LOAN_SEQUENCE_NUMBER", how="inner")
         )
-        data = self._impute(data)
 
-        return data, hist_12m
+        return self._impute(data), hist_12m
 
     # ------------------------------------------------------------------
     # build() — features brutes scalées, AVANT split. Commun.
@@ -114,14 +126,20 @@ class FeaturePipeline(ABC):
 
         if self.state == "train":
             target_df = self._build_target(hist_12m)
-            data      = data.merge(target_df, on="LOAN_SEQUENCE_NUMBER", how="inner")
+            data = data.merge(target_df, on="LOAN_SEQUENCE_NUMBER", how="inner")
+            x, y = self.selector.fit_transform(data, target=self.target)
+            self.scaler_run_id = self.selector.scaler_run_id
+            return x, y
 
-            x,y = self.selector.fit_transform(data, target=self.target)
-
-            self.scaler_artifact = self.selector.artifact
-            return x,y
+        # inférence — pas de target, pas de fit
+        selector = FeatureSelector()
+        return selector.transform(data, scaler)
 
 
 
 
         return self.selector.transform(data,scaler)
+
+    def _get_config(self) -> dict:
+        with open(self.config_path, "r") as f:
+            return yaml.safe_load(f)

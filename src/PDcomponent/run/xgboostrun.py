@@ -8,6 +8,7 @@ from xgboost import XGBClassifier
 
 from sklearn.metrics import roc_auc_score, confusion_matrix, accuracy_score, recall_score, precision_score, f1_score
 
+from pipelines.Features.feature_selector import FeatureSelector
 from src.PDcomponent.pipelines.pdFeaturePipeline import PDFeaturePipeline
 from src.PDcomponent.run.pdRUN import PDRun
 
@@ -17,6 +18,8 @@ class XGBoostRun(PDRun):
     def __init__(self, train_map: dict = None, test_map: dict = None, val_map: dict = None,config_path: str = None,test_path:str =None):
         super().__init__(train_map, test_map, val_map, config_path,test_path)
 
+
+
     def _run_train(self):
         # ########################
         # Train data transformation
@@ -25,16 +28,23 @@ class XGBoostRun(PDRun):
         # Le setup a instaurer le feature pipeline, contenant les scaler artifact
         # les donnee son dja sclaer avant d'applique woe
 
-        #self.featurePipeline = PDFeaturePipeline(window_months=12, woe_config=self.config['woe'])
+        self.featurePipeline = PDFeaturePipeline(window_months=12, woe_config=self.config['woe'])
 
         self.x_train_resampled, self.y_train_resampled = self.featurePipeline.apply_woe(self._x_train, self._y_train)
         binning_process = self.featurePipeline.binning_process
+
+
+
+        selector = self.featurePipeline.selector
 
         # ########################
         # Validation data transformation — pipeline dédié, pas réutilisation
         # ########################
 
         y_val = self._y_val
+
+
+
 
         pipeline_val = PDFeaturePipeline(
             window_months=12,
@@ -156,11 +166,21 @@ class XGBoostRun(PDRun):
         # Test data transformation
         # ########################
 
+        #scaler = self._load_scaler()
+
+        # Scale direct, sans passer par le pipeline
+        #selector = FeatureSelector()
+        #self._x_scaled = selector.transform(self._x_test, scaler)
+
         self.featurePipeline = PDFeaturePipeline(
             window_months=12,
             woe_config=self.config['woe'],
             binning_process=binning_process
         )
+
+
+
+
 
         x_transformed, _ = self.featurePipeline.apply_woe(self._x_test)
         y_test = self._y_test

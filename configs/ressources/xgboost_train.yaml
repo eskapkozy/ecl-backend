@@ -77,7 +77,7 @@ evaluation:
 
 mlflow:
   tracking_uri: "http://localhost:5000"
-  experiment_name: "classification"
+  experiment_name: 'PD_modelling'
   run_artifact_path:
     run_id: ""
     binning_process:
@@ -91,11 +91,21 @@ mlflow:
       artifact_type: "PKL"
       ismodel: false
 
+  preprocessing:
     scaler:
-      artifact_type: "PKL"
+      enabled: true
+      tracking_uri: http://localhost:5000
+      experiment_name: PD_modelling
+      run_id: a3b3a7f138634be08c84fc6df150d28a # todo ajouter automatiquement
+      run_name: PD_scaler_preprocessing_v1
+      run_role: preprocessing
+      model_family: PD
+      name: scaler
+      path: scaler
+      metadata_name: scaler_metadata
+      artifact_type: PKL
       ismodel: false
-      name: "scaler"
-      path: "scaler"
+      log_in_model_run: false
 
 artifacts:
   log_model: true

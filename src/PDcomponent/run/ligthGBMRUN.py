@@ -31,7 +31,7 @@ class LightGBMRun(PDRun):
         self.x_train_resampled, self.y_train_resampled = self.featurePipeline.apply_woe(self._x_train, self._y_train)
         binning_process = self.featurePipeline.binning_process
 
-
+        selector = self.featurePipeline.selector
 
         # ########################
         # Validation data transformation

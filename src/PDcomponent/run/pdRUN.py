@@ -60,9 +60,21 @@ class PDRun(RunAbstraction):
         self.featurePipeline = featurePipeline
 
 
+
+
     @abstractmethod
     def _load_data(self):
         raise NotImplementedError
+
+    def _load_scaler(self) -> dict:
+        scaler_config = self.config['mlflow']['preprocessing']['scaler']
+        return self._artifact_manager.load(
+            run_id=scaler_config['run_id'],
+            path=scaler_config['name'],
+            name=scaler_config['name'],
+            artifact_type="PKL",
+            ismodel=False
+        )
 
     @abstractmethod
     def _run_train(self):
@@ -100,11 +112,26 @@ class PDRun(RunAbstraction):
 
         )
 
-        self._artifact_manager.log(
-            obj=feature_pipeline.selector.scaler_artifact,
-            name="scaler",
-            artifact_type=ArtifactType.PKL
+        scaler_config = (
+            self.config
+            .get("mlflow", {})
+            .get("preprocessing", {})
+            .get("scaler", {})
         )
+
+        if scaler_config.get("log_in_model_run", True):
+            self._artifact_manager.log(
+                obj=feature_pipeline.selector.artifacts,
+                name=scaler_config.get("name", "scaler"),
+                artifact_type=ArtifactType.PKL
+            )
+
+        scaler_run_id = scaler_config.get("run_id") or feature_pipeline.scaler_run_id
+        if scaler_run_id:
+            mlflow.log_params({
+                "scaler_run_id": scaler_run_id,
+                "scaler_artifact_path": scaler_config.get("path", "scaler"),
+            })
 
 
 

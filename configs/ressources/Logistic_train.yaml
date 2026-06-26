@@ -88,26 +88,37 @@ evaluation:
 
 # Techno Used
 
-mlflow:
+mmlflow:
   tracking_uri: "http://localhost:5000"
-  experiment_name: "classification"
-
-
-  # Artifact path
+  experiment_name: 'PD_modelling'
   run_artifact_path:
-    run_id:
+    run_id: ""
     binning_process:
-      name:
-      path:
-      artifact_type:
+      name: "binning_process"
+      path: "binning_process"
+      artifact_type: "PKL"
       ismodel: false
     model_fit:
-      name:
-      path:
-      artifact_type:
+      name: "model_fit"
+      path: "model_fit"
+      artifact_type: "PKL"
       ismodel: false
 
-
+  preprocessing:
+    scaler:
+      enabled: true
+      tracking_uri: http://localhost:5000
+      experiment_name: PD_modelling
+      run_id: a3b3a7f138634be08c84fc6df150d28a # todo ajouter automatiquement
+      run_name: PD_scaler_preprocessing_v1
+      run_role: preprocessing
+      model_family: PD
+      name: scaler
+      path: scaler
+      metadata_name: scaler_metadata
+      artifact_type: PKL
+      ismodel: false
+      log_in_model_run: false
 # Livrable ( Artifacts , Reports , Plot )
 
 artifacts:

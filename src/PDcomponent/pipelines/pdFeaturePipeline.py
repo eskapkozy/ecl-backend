@@ -47,8 +47,12 @@ class PDFeaturePipeline(FeaturePipeline):
     DEFAULT_WOE_CONFIG = {"iv_threshold": 0.02, "metric": "woe"}
 
     def __init__(self, window_months: int = 12, state: str = "train",
-                 woe_config: dict = None, binning_process=None):
-        super().__init__(window_months=window_months, state=state)
+                 woe_config: dict = None, binning_process=None, config_path: dict = None):
+        super().__init__(
+            window_months=window_months,
+            state=state,
+            config_path=config_path,
+        )
         self.woe_config       = {**self.DEFAULT_WOE_CONFIG, **(woe_config or {})}
         self.woe_pipeline_    = None
         self.binning_process  = binning_process

@@ -33,17 +33,17 @@ correlation:
   threshold: 0.8
 evaluation:
   threshold_result:
-    threshold: 0.029299283465647707
+    threshold: 0.027779146361888534
   constraints_result:
     recall:
-      value: 0.804380597676687
+      value: 0.8019863438857853
     f1:
-      value: 0.18497710982187465
+      value: 0.18442088091353998
 mlflow:
   tracking_uri: http://localhost:5000
-  experiment_name: classification
+  experiment_name: PD_modelling
   run_artifact_path:
-    run_id: c66426c3430e4979b101380be824c502
+    run_id: db104eaad66a438ca0e9026e1d0660f8
     binning_process:
       name: binning_process
       path: binning_process
@@ -54,6 +54,25 @@ mlflow:
       path: model_fit
       artifact_type: PKL
       ismodel: false
+
+
+  preprocessing:
+    scaler:
+      enabled: true
+      tracking_uri: http://localhost:5000
+      experiment_name: PD_modelling
+      run_id: a3b3a7f138634be08c84fc6df150d28a # todo ajouter automatiquement
+      run_name: PD_scaler_preprocessing_v1
+      run_role: preprocessing
+      model_family: PD
+      name: scaler
+      path: scaler
+      metadata_name: scaler_metadata
+      artifact_type: PKL
+      ismodel: false
+      log_in_model_run: false
+
+
 artifacts:
   log_model: true
   log_woe: true

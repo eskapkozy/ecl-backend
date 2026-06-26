@@ -20,7 +20,7 @@ class CleaningPipeline:
 
 
 
-    def __init__(self,hist_path:str,orig_path: str ,loan_number: str = None):
+    def __init__(self,hist_path:str= None,orig_path: str = None ,loan_number: str = None, hist : pd.DataFrame = None, orig : pd.DataFrame = None):
 
 
 
@@ -127,16 +127,28 @@ class CleaningPipeline:
     "MORTGAGE_INSURANCE_CANCELLATION",
 ]
 
+        self.orig = None
+        self.hist = None
+        self.loan_number = None
 
-        orig_file_columns = ["SOURCE_ROW_ID", *ORIGINATION_COLUMNS, "SOURCE_QUARTER"]
-        performance_file_columns = ["SOURCE_ROW_ID", *PERFORMANCE_COLUMNS, "SOURCE_QUARTER"]
+        if hist is not None & orig is not None:
+           self.hist = hist
+           self.orig = orig
 
-        self.orig = pd.read_csv(orig_path, header=None, sep='|', names=orig_file_columns)
-        self.hist = pd.read_csv(hist_path, header=None, sep='|', names=performance_file_columns)
+        else:
 
-        self.orig = self.orig.drop(columns=["SOURCE_ROW_ID", "SOURCE_QUARTER"])
-        self.hist = self.hist.drop(columns=["SOURCE_ROW_ID", "SOURCE_QUARTER"])
-        self.loan_number = loan_number
+            orig_file_columns = ["SOURCE_ROW_ID", *ORIGINATION_COLUMNS, "SOURCE_QUARTER"]
+            performance_file_columns = ["SOURCE_ROW_ID", *PERFORMANCE_COLUMNS, "SOURCE_QUARTER"]
+
+            self.orig = pd.read_csv(orig_path, header=None, sep='|', names=orig_file_columns)
+            self.hist = pd.read_csv(hist_path, header=None, sep='|', names=performance_file_columns)
+
+            self.orig = self.orig.drop(columns=["SOURCE_ROW_ID", "SOURCE_QUARTER"])
+            self.hist = self.hist.drop(columns=["SOURCE_ROW_ID", "SOURCE_QUARTER"])
+            self.loan_number = loan_number
+
+
+
 
         self.x_scaled = None
         self.y_scaled = None

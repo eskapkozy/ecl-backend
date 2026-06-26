@@ -32,6 +32,8 @@ from pathlib import Path
 import mlflow
 import yaml
 
+
+from pipelines.Features.feature_selector import FeatureSelector
 from src.Utile.artifactManager import ArtifactManager, ArtifactType
 
 
@@ -50,6 +52,7 @@ class RunAbstraction(ABC):
         self._x_train = self._y_train = None
         self._x_val   = self._y_val   = None
         self._x_test  = self._y_test  = None
+        self._x_scaled = None
 
         if self._is_train:
             self._x_train = train_map["x_train"]
@@ -85,6 +88,11 @@ class RunAbstraction(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def _load_scaler(self) -> dict:
+        """Charge le scaler artifact depuis MLflow. Retourne le dict scaler."""
+        raise NotImplementedError
+
+    @abstractmethod
     def _run_train(self):
         """Logique d'entraînement propre à l'algorithme (régression logistique, XGBoost, ...)."""
         raise NotImplementedError
@@ -103,6 +111,12 @@ class RunAbstraction(ABC):
             return self._run_train()
         return self._run_test()
 
+    def scale_data(self, data):
+
+        scaler = self._load_scaler()
+        selector = FeatureSelector()
+
+        return selector.transform(data, scaler)
     # ------------------------------------------------------------------
     # Evaluation & Hyperparamettre
     # ------------------------------------------------------------------
@@ -150,6 +164,10 @@ class RunAbstraction(ABC):
     @abstractmethod
     def save_evaluation_metrics(self, test_config_path: str):
         raise NotImplementedError
+
+
+
+
 
     def y_true(self):
         return self._y_test
