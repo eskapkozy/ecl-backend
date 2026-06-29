@@ -1,9 +1,20 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.api.router.pd_model_route import router as pd_router
+
+
 # TODO: remplacer par config centralisée (.env + settings.py)
 
 app = FastAPI()
+
+# -----------------
+# DEFAULT
+# -----------------
+
+app.include_router(pd_router)
+
+
 
 # -------------------
 # Health endpoint test

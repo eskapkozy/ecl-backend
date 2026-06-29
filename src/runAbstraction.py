@@ -33,7 +33,7 @@ import mlflow
 import yaml
 
 
-from pipelines.Features.feature_selector import FeatureSelector
+from src.pipelines.Features.feature_selector import FeatureSelector
 from src.Utile.artifactManager import ArtifactManager, ArtifactType
 
 

@@ -23,11 +23,11 @@ from concurrent.futures import ThreadPoolExecutor
 import select
 import yaml
 
-from pipelines.Features.window_builder        import WindowBuilder
-from pipelines.Features.delinquency_features  import DelinquencyFeatures
-from pipelines.Features.capital_features      import CapitalFeatures
-from pipelines.Features.origination_features  import OriginationFeatures
-from pipelines.Features.feature_selector      import FeatureSelector
+from src.pipelines.Features.window_builder        import WindowBuilder
+from src.pipelines.Features.delinquency_features  import DelinquencyFeatures
+from src.pipelines.Features.capital_features      import CapitalFeatures
+from src.pipelines.Features.origination_features  import OriginationFeatures
+from src.pipelines.Features.feature_selector      import FeatureSelector
 
 
 class FeaturePipeline(ABC):

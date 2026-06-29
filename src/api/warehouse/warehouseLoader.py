@@ -5,7 +5,7 @@ import pandas as pd
 import psycopg2
 from sqlalchemy import create_engine, text
 
-from warehouse.models import Base
+from src.api.warehouse.models import Base
 
 
 class WarehouseLoader:
@@ -75,11 +75,15 @@ class WarehouseReader:
         self.engine = create_engine(db_url)
 
     def fetch(self, loan_id: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-        query_hist = text("SELECT * FROM loans_performance WHERE LOAN_SEQUENCE_NUMBER = :loan_id")
-        query_orig = text("SELECT * FROM loans_origination WHERE LOAN_SEQUENCE_NUMBER = :loan_id")
+        query_hist = text("SELECT * FROM loans_performance WHERE loan_sequence_number = :loan_id")
+        query_orig = text("SELECT * FROM loans_origination WHERE loan_sequence_number = :loan_id")
         with self.engine.connect() as conn:
             hist = pd.read_sql(query_hist, conn, params={"loan_id": loan_id})
             orig = pd.read_sql(query_orig, conn, params={"loan_id": loan_id})
+
+        hist.columns = hist.columns.str.upper()
+        orig.columns = orig.columns.str.upper()
+
         return hist, orig
 
     def fetch_many(self, loan_ids: list[str]) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -88,4 +92,8 @@ class WarehouseReader:
         with self.engine.connect() as conn:
             hist = pd.read_sql(query_hist, conn, params={"ids": loan_ids})
             orig = pd.read_sql(query_orig, conn, params={"ids": loan_ids})
+
+        hist.columns = hist.columns.str.upper()
+        orig.columns = orig.columns.str.upper()
+
         return hist, orig

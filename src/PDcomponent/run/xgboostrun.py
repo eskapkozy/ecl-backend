@@ -8,7 +8,7 @@ from xgboost import XGBClassifier
 
 from sklearn.metrics import roc_auc_score, confusion_matrix, accuracy_score, recall_score, precision_score, f1_score
 
-from pipelines.Features.feature_selector import FeatureSelector
+
 from src.PDcomponent.pipelines.pdFeaturePipeline import PDFeaturePipeline
 from src.PDcomponent.run.pdRUN import PDRun
 

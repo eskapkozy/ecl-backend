@@ -39,7 +39,7 @@ import pandas as pd
 from imblearn.over_sampling import SMOTE
 
 from src.pipelines.Features.featurePipeline       import FeaturePipeline
-from pipelines.Features.woe_pipeline import WoePipeline
+from src.pipelines.Features.woe_pipeline import WoePipeline
 
 
 class PDFeaturePipeline(FeaturePipeline):

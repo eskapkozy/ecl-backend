@@ -1,13 +1,13 @@
 run_id: b7142e5699114ccb8ea9808dc0f0fe69
 
 #tracking_uri: "http://mlflow:5000"
-tracking_uri: "http://localhost:5000"
+tracking_uri: "http://mlflow:5000"
 experiment_name: "PD_modelling"
 
 preprocessing:
   scaler:
     enabled: true
-    tracking_uri: "http://localhost:5000"
+    tracking_uri: "http://mlflow:5000"
     experiment_name: "PD_modelling"
     run_id: 7684096e6e254843846de27ab9df3607
     run_name: PD_scaler_preprocessing_v1

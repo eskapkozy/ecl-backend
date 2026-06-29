@@ -50,7 +50,7 @@ class PredictionAbstraction(ABC):
         config = [
             self._mlflow_config['binning_process'],
             self._mlflow_config['model_fit'],
-            self._mlflow_config['stacking_weights'],
+            #self._mlflow_config['stacking_weights'],
         ]
         return self._artifactmanager.load_All(run_id=run_id, configList=config)
 

@@ -1,7 +1,7 @@
 import pandas as pd
 
-from PDcomponent.pipelines.pdFeaturePipeline import PDFeaturePipeline
-from pipelines.Features.feature_selector import FeatureSelector
+from src.PDcomponent.pipelines.pdFeaturePipeline import PDFeaturePipeline
+
 from src.predictionAbstraction import PredictionAbstraction
 
 
@@ -23,7 +23,7 @@ class PDPrediction(PredictionAbstraction):
     def setup(self):
         artifacts = self._load_data()
 
-        binning_process, self._model_fit, _ = self._load_data()
+        binning_process, self._model_fit,  = self._load_data()
 
         # build
 
