@@ -1,0 +1,77 @@
+run:
+  name: "LightGBM LGD Multiclass Train"
+  version: 1
+  random_state: 42
+  is_train: true
+
+model:
+  name: "LightGBM"
+  n_bins: 8
+
+  hyperparameters:
+    objective: "multiclass"
+    early_stopping_rounds: 20
+    n_estimators: 1000
+
+  grid_search:
+    n_trials: 20
+    param_space:
+      max_depth:           [3, 8]
+      num_leaves:          [20, 80]
+      min_child_samples:   [10, 50]
+      reg_lambda:          [0.1, 10.0]
+      reg_alpha:           [0.0, 1.0]
+      subsample:           [0.6, 1.0]
+      colsample_bytree:    [0.6, 1.0]
+      learning_rate:       [0.01, 0.1]
+      n_estimators:        [100, 500]
+
+evaluation:
+  rmse: true
+  dxy: true
+  ece: true
+  multiclass_accuracy: true
+  multiclass_log_loss: true
+  calibration_by_bin: true
+
+mlflow:
+  tracking_uri: "http://localhost:5000"
+  experiment_name: "LGD_modelling"
+  run_artifact_path:
+    run_id: ""
+    lgd_discretizer:
+      name: "lgd_discretizer"
+      path: "lgd_discretizer"
+      artifact_type: "PKL"
+      ismodel: false
+    lgd_bin_summary:
+      name: "lgd_bin_summary"
+      path: "lgd_bin_summary"
+      artifact_type: "CSV"
+      ismodel: false
+    model_fit:
+      name: "model_fit"
+      path: "model_fit"
+      artifact_type: "PKL"
+      ismodel: false
+
+  preprocessing:
+    scaler:
+      enabled: true
+      tracking_uri: "http://localhost:5000"
+      experiment_name: "LGD_modelling"
+      run_id: "cf87a8b6f2ca416e8d9d346ca30b869f"
+      run_name: "LGD_scaler_preprocessing_v1"
+      run_role: "preprocessing"
+      model_family: "LGD"
+      metadata_name: scaler_metadata
+      name: "scaler"
+      path: "scaler"
+      artifact_type: "PKL"
+      ismodel: false
+      log_in_model_run: false
+
+artifacts:
+  log_model: true
+  log_bin_summary: true
+  log_calibration_plot: true

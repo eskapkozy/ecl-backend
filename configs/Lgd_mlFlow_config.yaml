@@ -1,0 +1,43 @@
+run_id: beb6d0e7d94d4cae8176c24dca86b3b7
+
+#tracking_uri: "http://mlflow:5000"
+tracking_uri: "http://localhost:5000"
+experiment_name: LGD_modelling
+
+preprocessing:
+  scaler:
+    enabled: true
+    tracking_uri: http://localhost:5000 #"http://mlflow:5000"
+    experiment_name: LGD_modelling
+    run_id: cf87a8b6f2ca416e8d9d346ca30b869f
+    run_name: LGD_scaler_preprocessing_v1
+    run_role: preprocessing
+    model_family: LGD
+    name: scaler
+    path: scaler
+    metadata_name: scaler_metadata
+    artifact_type: PKL
+    ismodel: false
+    log_in_model_run: false
+
+lgd_discretizer:
+  name: lgd_discretizer
+  path: lgd_discretizer
+  artifact_type: PKL
+  ismodel: false
+
+lgd_bin_summary:
+  name: lgd_bin_summary
+  path: lgd_bin_summary
+  artifact_type: CSV
+  ismodel: false
+
+model_fit:
+  artifact_type: "PKL"
+  ismodel: false
+  name: "model_fit"
+  path: "model_fit"
+
+
+
+

@@ -20,7 +20,7 @@ class CleaningPipeline:
 
 
 
-    def __init__(self,hist_path:str= None,orig_path: str = None ,loan_number: str = None, hist : pd.DataFrame = None, orig : pd.DataFrame = None):
+    def __init__(self,hist_path:str= None,orig_path: str = None ,loan_number: str = None, hist : pd.DataFrame = None, orig : pd.DataFrame = None, mode: str = "pd"):
 
 
 
@@ -127,11 +127,13 @@ class CleaningPipeline:
     "MORTGAGE_INSURANCE_CANCELLATION",
 ]
 
+        self.mode = mode
+
         self.orig = None
         self.hist = None
         self.loan_number = None
 
-        if hist is not None & orig is not None:
+        if self.hist is not None and self.orig is not None:
            self.hist = hist
            self.orig = orig
 
@@ -257,11 +259,16 @@ class CleaningPipeline:
 
         hist, orig = join_orig_hist(orig, hist)
 
-        to_drop = [col for col in hist.columns if col not in self.ELIGIBLE_COLUMNS]
-        hist = hist.drop(columns=to_drop)
+        # Le drop est appliqué uniquement en mode PD.
+        # En mode LGD, hist est retourné complet — la sélection des features
+        # est déléguée à LGDFeaturePipeline.
+        if self.mode == "pd":
+            to_drop = [col for col in hist.columns if col not in self.ELIGIBLE_COLUMNS]
+            hist = hist.drop(columns=to_drop)
+
         hist = hist.loc[:, ~hist.columns.duplicated()]
 
-        return hist,orig
+        return hist, orig
 
 
 
@@ -492,6 +499,27 @@ class CleaningPipeline:
         hist['MODIFICATION_FLAG'] = hist['MODIFICATION_FLAG'].fillna('N')
 
         hist['INTEREST_RATE_STEP_INDICATOR'] = hist['INTEREST_RATE_STEP_INDICATOR'].fillna('N')
+
+        if self.mode == "lgd":
+            # CURRENT_LOAN_DELINQUENCY_STATUS — 'XX' = statut inconnu
+            hist['CURRENT_LOAN_DELINQUENCY_STATUS'] = (
+                hist['CURRENT_LOAN_DELINQUENCY_STATUS']
+                .replace('XX', np.nan)
+                .pipe(pd.to_numeric, errors='coerce')
+            )
+
+            # Proceeds et recoveries — peuvent contenir 'U' (unavailable)
+            hist['NET_SALE_PROCEEDS'] = (
+                hist['NET_SALE_PROCEEDS']
+                .replace('U', np.nan)
+                .pipe(pd.to_numeric, errors='coerce')
+            )
+
+            for col in ['MI_RECOVERIES', 'NON_MI_RECOVERIES', 'TOTAL_EXPENSES', 'ACTUAL_LOSS_CALCULATION']:
+                hist[col] = pd.to_numeric(hist[col], errors='coerce')
+
+            # Flag paiement différé
+            hist['PAYMENT_DEFERRAL_FLAG'] = hist['PAYMENT_DEFERRAL_FLAG'].fillna('N').astype(object)
 
 
         return hist

@@ -1,0 +1,24 @@
+run:
+  name: LightGBM LGD Multiclass Test
+  version: 1
+  random_state: 42
+  is_train: false
+model:
+  name: LightGBM
+  n_bins: 8
+  hyperparameters: null
+  grid_search: null
+evaluation:
+  regression_result:
+    rmse:
+      value: 0.2697590900750468
+    dxy:
+      value: 0.29082974071243406
+  calibration_result:
+    ece:
+      value: 0.017187661727768744
+
+artifacts:
+  log_model: true
+  log_bin_summary: true
+  log_calibration_plot: true

@@ -6,12 +6,13 @@ Responsabilité : sélection et mise à l'échelle des features
 
 Optimisation : 2 appels sklearn au lieu de 19 (un par groupe de scaling).
 """
+from venv import logger
 
 import pandas as pd
-import logging
-import numpy as np
+
 import mlflow
 from sklearn.preprocessing import StandardScaler, RobustScaler
+
 
 from src.Utile.artifactManager import ArtifactManager, ArtifactType
 
@@ -96,7 +97,8 @@ class FeatureSelector:
 
         self._log_scaler_artifact()
 
-
+        logger.info('datas scaled')
+        print('datas scaled')
         return X, y
 
     def configure_scaler_logging(self, scaler_logging_config: dict = None):
@@ -106,30 +108,36 @@ class FeatureSelector:
 
 
     def _log_scaler_artifact(self):
+
+
+
+
+
         config = self.scaler_logging_config or {}
         if not config.get("enabled", False):
+            logger.info("Scalering logging is disabled")
             return
 
 
-        run_name = config.get("run_name", "PD_scaler_preprocessing")
+        run_name = config['run_name']#config.get("run_name", "PD_scaler_preprocessing")
         nested = mlflow.active_run() is not None
 
         if config.get("tracking_uri"):
-            mlflow.set_tracking_uri(config["tracking_uri"])
+            mlflow.set_tracking_uri(config['tracking_uri'])
         if config.get("experiment_name"):
             mlflow.set_experiment(config["experiment_name"])
 
         with mlflow.start_run(run_name=run_name, nested=nested) as run:
             self.scaler_run_id = run.info.run_id
             mlflow.set_tags({
-                "run_role": config.get("run_role", "preprocessing"),
+                "run_role": config['run_role'], #config.get("run_role", "preprocessing"),
                 "artifact_kind": "scaler",
-                "model_family": config.get("model_family", "PD"),
+                "model_family": config['model_family'] #config.get("model_family", "PD"),
             })
 
             self.artifact_manager.log(
                 obj=self.artifacts,
-                name=config.get("name", "scaler"),
+                name=config['name'], #config.get("name", "scaler"),
                 artifact_type=ArtifactType.PKL,
             )
 
@@ -137,15 +145,17 @@ class FeatureSelector:
                 obj={
                     "run_id": run.info.run_id,
                     "run_name": run_name,
-                    "model_family": config.get("model_family", "PD"),
+                    "model_family": config['model_family'],#config.get("model_family", "PD"),
                     "features": self.features_,
                     "robust_cols": self.robust_cols_,
                     "standard_cols": self.standard_cols_,
                     "scaling": self.SCALING,
                 },
-                name=config.get("metadata_name", "scaler_metadata"),
+                name=config['metadata_name'], #config.get("metadata_name", "scaler_metadata"),
                 artifact_type=ArtifactType.JSON,
             )
+
+        logger.info('scaler artifact logged')
 
     def transform(self, df: pd.DataFrame,scaler: dict) -> pd.DataFrame:
 

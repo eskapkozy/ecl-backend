@@ -514,6 +514,161 @@ def apply(self):
     return self._model_fit.predict_proba(x_woe)[:, 1]
 ```
 
+
+
+
+
+# Addendum — Révision de la Target PD
+
+**Document de référence** : Audit Technique — Pipeline PD, v1.0 (26 juin 2026)
+**Section concernée** : 2.1.8 PDFeaturePipeline, 5.3 Modélisation
+**Date de révision** : 30 juin 2026
+
+---
+
+## 1. Contexte de la révision
+
+L'audit v1.0 documente la target PD comme suit :
+
+> Target binaire : défaut = 1 si max(DPD) ≥ 3 sur 12 mois (standard IFRS 9 / Bâle III)
+
+Cette règle a été identifiée comme **incomplète** sur deux axes lors de la conception du modèle LGD, ce qui a motivé une révision en amont du PD pour garantir la cohérence entre les deux populations de défaut (PD et LGD doivent juger le défaut de la même manière).
+
+### 1.1 Premier axe — Défaut structurel non capté
+
+Certains `ZERO_BALANCE_CODE` indiquent une résolution forcée du loan (foreclosure, short sale, REO, note sale, relinquishment, deed-in-lieu) **indépendamment du DPD observé dans la window**. Un loan peut atteindre ces codes sans jamais avoir affiché `DPD ≥ 3` dans la fenêtre de 12 mois observée — par exemple en cas de modification ou de forbearance suivie d'une résolution.
+
+### 1.2 Second axe — Cure events non traités
+
+La règle `max(DPD) ≥ 3` traite un pic isolé de délinquance comme un défaut définitif. Or un loan peut atteindre 90 DPD puis se rétablir durablement (cure) dans la même window — il s'agit d'un faux positif au regard de la définition réglementaire du défaut, qui repose sur la **persistance** du comportement de non-paiement.
+
+---
+
+## 2. Nouvelle définition — Trois couches
+
+La target est désormais construite sur trois couches de lecture, combinées par une logique d'union :
+
+```
+default = signal_structurel  |  (signal_dpd  &  persistance  &  ~cure)
+```
+
+### 2.1 Couche 1 — Signal structurel (sans condition DPD)
+
+```python
+STRUCTURAL_DEFAULT_CODES = {2, 3, 9, 15, 16, 96}
+```
+
+| Code | Signification |
+|---|---|
+| 02 | Third Party Sale (foreclosure sale) |
+| 03 | Short Sale |
+| 09 | REO Disposition |
+| 15 | Note Sale |
+| 16 | Relinquishment |
+| 96 | Deed-in-lieu |
+
+Si `ZERO_BALANCE_CODE` observé dans la window appartient à cet ensemble, le loan est en défaut — **sans condition sur le DPD**. La résolution forcée est en elle-même la preuve du défaut économique.
+
+`ZERO_BALANCE_CODE = 01` (prepayment) est explicitement exclu — un remboursement anticipé n'est jamais un défaut.
+
+### 2.2 Couche 2 — Signal comportemental (DPD)
+
+Seuil réglementaire inchangé : `DPD ≥ 3` (90 jours de retard, Basel III).
+
+Appliqué **uniquement aux loans actifs** dans la window (`ZERO_BALANCE_CODE = 0` sur toute la window observée) — les loans déjà couverts par la couche structurelle ne repassent pas par cette couche.
+
+### 2.3 Couche 3 — Qualification persistance / cure
+
+Le signal DPD seul ne suffit pas ; il doit être qualifié par la trajectoire du loan dans la window.
+
+**Persistance** : le défaut comportemental n'est confirmé que si le loan présente au moins **3 mois consécutifs** à `DPD ≥ 3` dans la window.
+
+**Cure** : un défaut confirmé est annulé si le loan revient à `DPD = 0` pendant au moins **3 mois consécutifs** après le run de défaut.
+
+Ces seuils (3 mois) sont alignés sur la pratique standard de lecture des cycles de délinquance/recouvrement sur une fenêtre d'observation de 12 mois.
+
+---
+
+## 3. Implémentation
+
+### 3.1 Périmètre — pas de leakage
+
+Toutes les couches opèrent exclusivement sur `hist_12m` — la window déjà construite par `WindowBuilder`. Aucune information hors fenêtre n'est utilisée (pas de lecture de `ZERO_BALANCE_CODE` au-delà de la window pour anticiper une résolution future).
+
+### 3.2 Vectorisation
+
+L'implémentation initiale (`groupby().apply()` avec boucle Python par loan) a été remplacée par une version vectorisée utilisant le pattern `groupby + cumsum` pour la détection de runs consécutifs, pour des raisons de performance sur le volume Freddie Mac.
+
+```python
+in_default_flag = dpd >= DPD_THRESHOLD
+
+# Longueur de run consécutif, réinitialisée à chaque rupture et à chaque loan
+persistence_break = (~in_default_flag).groupby(loan_id).cumsum()
+persistence_run = in_default_flag.groupby([loan_id, persistence_break]).cumsum()
+has_persistence = (persistence_run >= PERSISTENCE_MONTHS).groupby(loan_id).any()
+```
+
+**Précondition critique** : cette logique suppose que `hist_12m` est trié chronologiquement par loan (`MONTHLY_REPORTING_PERIOD` croissant). Ce tri est garanti en amont par `WindowBuilder`.
+
+### 3.3 Code de référence
+
+```python
+STRUCTURAL_DEFAULT_CODES = {2, 3, 9, 15, 16, 96}
+DPD_THRESHOLD = 3
+PERSISTENCE_MONTHS = 3
+CURE_MONTHS = 3
+
+def _build_target(self, hist: pd.DataFrame) -> pd.DataFrame:
+    structural = self._structural_default(hist)
+    behavioral = self._behavioral_default(hist)
+    default = (structural | behavioral).astype(int)
+    return default.reset_index().rename(columns={0: "default"})
+```
+
+---
+
+## 4. Validation
+
+Tests réalisés sur la population complète (1 390 970 loans, window 12 mois) :
+
+| Métrique | Valeur |
+|---|---|
+| Défauts structurels | 45 598 |
+| Défauts comportementaux (persistance sans cure) | 1 010 |
+| Overlap structurel ∩ comportemental | 0 |
+| Total défaut (union) | 46 608 |
+| **Taux de défaut global** | **3.35%** |
+| Loans retirés par la logique cure (vs ancienne règle) | 14 012 |
+| Contradiction structurel/actif | 0 |
+
+**Lecture des résultats** :
+
+- L'overlap nul confirme que les deux couches sont mutuellement exclusives par construction (la couche comportementale est restreinte aux loans actifs).
+- Les 14 012 loans retirés par la logique cure confirment que des faux positifs significatifs existaient sous l'ancienne règle `max(DPD) ≥ 3` — ces loans avaient atteint 90 DPD ponctuellement mais s'étaient rétablis durablement.
+- Le taux de défaut de 3.35% est cohérent avec les taux observés sur le dataset Freddie Mac SFLLD pour les vintages couvertes.
+
+---
+
+## 5. Impact sur le périmètre LGD
+
+Cette révision garantit que la population de défaut utilisée pour entraîner le modèle PD et la population de loans éligibles au calcul de la target LGD (`compute_lgd_target`, filtrée sur `ZERO_BALANCE_CODE ∈ STRUCTURAL_DEFAULT_CODES`) reposent sur **la même définition économique du défaut structurel**. Les codes de résolution forcée utilisés dans les deux composants sont identiques.
+
+---
+
+## 6. Mise à jour de la table 5.3 (Modélisation) de l'audit v1.0
+
+| Décision | Ancienne valeur | Nouvelle valeur |
+|---|---|---|
+| Définition du défaut | `max(DPD) ≥ 3` sur 12 mois | Trois couches : structurel (ZERO_BALANCE_CODE) ∪ comportemental (persistance DPD sans cure) |
+
+---
+
+**Statut** : Implémenté et validé. À intégrer dans la prochaine révision majeure de l'audit (v2.0).
+
+
+
+
+
 ---
 
 **Document version** : 1.0  

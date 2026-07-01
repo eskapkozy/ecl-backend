@@ -17,6 +17,8 @@ class PDFeaturePipeline(FeaturePipeline):
 """
 
 from abc import ABC, abstractmethod
+from venv import logger
+
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 
@@ -41,12 +43,19 @@ class FeaturePipeline(ABC):
 
         self.config = None
         self.selector = None
+
+
+
         if config_path is not None:
             self.config = self._get_config()
+
+
 
             self.selector = FeatureSelector(
                 scaler_logging_config=self.config['mlflow']['preprocessing']['scaler'],
             )
+            logger.info("scaler config loaded successfully")
+            print("scaler config loaded successfully")
 
 
         self.state          = state
@@ -54,6 +63,15 @@ class FeaturePipeline(ABC):
 
         self.scaler_artifact = None
         self.scaler_run_id = None
+
+
+
+
+
+
+
+        logger.info("FeaturePipeline initialized successfully")
+
     # ------------------------------------------------------------------
     # Construction de la target — spécifique à chaque modèle
     # ------------------------------------------------------------------
@@ -125,6 +143,9 @@ class FeaturePipeline(ABC):
         data, hist_12m = self._build_features(hist, orig)
 
         if self.state == "train":
+
+
+
             target_df = self._build_target(hist_12m)
             data = data.merge(target_df, on="LOAN_SEQUENCE_NUMBER", how="inner")
             x, y = self.selector.fit_transform(data, target=self.target)

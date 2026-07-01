@@ -27,8 +27,10 @@ from scipy import stats
 
 class Util:
 
-    def __init__(self, dataset: pd.DataFrame):
-        self.dataset = dataset.copy()
+    def __init__(self, dataset: pd.DataFrame = None):
+
+
+        self.dataset = dataset.copy() if dataset is not None else None
 
     def bivariate_summary(self, target: str) -> pd.DataFrame:
         """
@@ -225,6 +227,57 @@ class Util:
         axes[1].set_title(f'{target} = {cats[0]}')
 
         plt.tight_layout()
+        plt.show()
+
+
+
+    def plot_real_vs_pred(self,df, col_observed, col_predicted):
+        """Génère un scatter plot comparant le réel vs le prédit."""
+        plt.figure(figsize=(8, 6))
+
+        # Graphique de dispersion
+        sns.scatterplot(
+            data=df, x=col_observed, y=col_predicted, alpha=0.6, color="purple"
+        )
+
+        # Ligne de référence parfaite (y = x)
+        lims = [
+            min(df[col_observed].min(), df[col_predicted].min()),
+            max(df[col_observed].max(), df[col_predicted].max()),
+        ]
+        plt.plot(lims, lims, color="red", linestyle="--", label="Parfait")
+
+        plt.title(f"Comparaison : {col_observed} vs {col_predicted}")
+        plt.xlabel(f"Réel ({col_observed})")
+        plt.ylabel(f"Prédit ({col_predicted})")
+        plt.legend()
+        plt.grid(True, linestyle=":", alpha=0.6)
+        plt.show()
+
+
+
+    def plot_distribution_per_bin(self,df, col_observed, col_predicted):
+        """Affiche la distribution des prédictions (LGD) pour chaque classe observée."""
+        plt.figure(figsize=(10, 6))
+
+        # Histogramme/KDE segmenté par classe réelle
+        sns.histplot(
+            data=df,
+            x=col_predicted,
+            hue=col_observed,
+            element="step",
+            stat="density",
+            common_norm=False,
+            alpha=0.3,
+            kde=True,
+        )
+
+        plt.title(
+            f"Distribution de {col_predicted} pour chaque classe de {col_observed}"
+        )
+        plt.xlabel(f"Valeurs Prédites ({col_predicted})")
+        plt.ylabel("Densité")
+        plt.grid(True, linestyle=":", alpha=0.5)
         plt.show()
 
     # ------------------------------------------------------------------

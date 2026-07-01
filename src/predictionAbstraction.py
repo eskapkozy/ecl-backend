@@ -31,7 +31,9 @@ class PredictionAbstraction(ABC):
         self._x_data = None
         self._featurePipeline = None
 
-        self.setup()
+        self._model_fit = None
+
+        #self.setup()
 
     @abstractmethod
     def apply(self):
