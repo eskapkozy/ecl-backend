@@ -6,9 +6,18 @@ car sans intérêt pour PD : durée du défaut, vitesse de dégradation,
 equity au moment du défaut.
 
 Hypothèses :
-    - df déjà restreint aux loans en défaut (LossFeatures._select_defaulted
-      en amont, dans LGDFeaturePipeline)
+    - df déjà restreint aux loans en défaut (filtrage fait en amont,
+      hors de cette classe — LossFeatures ne vérifie jamais le défaut,
+      elle fait confiance à ce qui lui est fourni)
     - df trié chronologiquement par loan (MONTHLY_REPORTING_PERIOD croissant)
+
+Note :
+    _en_defaut ici est un marqueur INTRA-historique (ligne par ligne,
+    DPD >= seuil à ce mois précis), utilisé pour localiser le pic de
+    dégradation et le premier mois de bascule DPD à l'intérieur d'un
+    historique déjà acquis comme étant en défaut. Ce n'est PAS une
+    vérification du statut de défaut du prêt — cette responsabilité
+    n'appartient pas à cette classe.
 """
 
 import pandas as pd
@@ -80,9 +89,9 @@ class LossFeatures:
     # ------------------------------------------------------------------
 
     def build(self) -> pd.DataFrame:
-        n_months   = self._n_months_in_default().reset_index()
-        time_to_max= self._time_to_max_dpd().reset_index()
-        ltv        = self._ltv_at_default().reset_index()
+        n_months    = self._n_months_in_default().reset_index()
+        time_to_max = self._time_to_max_dpd().reset_index()
+        ltv         = self._ltv_at_default().reset_index()
 
         return (
             n_months

@@ -14,10 +14,15 @@ class PredictionAbstraction(ABC):
                  hist: pd.DataFrame,
                  orig: pd.DataFrame,
                  mlflow_config: str = None,
-                 model_config: str = None):
+                 model_config: str = None,
+                 model_type: str = None):
 
-        mlflow_config = mlflow_config or os.environ["MLFLOW_CONFIG_PATH"]
-        model_config  = model_config  or os.environ["MODEL_CONFIG_PATH"]
+        mlflow_config = mlflow_config or self.path(model_type)[0] #os.environ["MLFLOW_CONFIG_PATH"]
+        model_config  = model_config  or self.path(model_type)[1] #os.environ["MODEL_CONFIG_PATH"]
+
+
+
+        
 
         self._model_config  = self.load_config(model_config)
         self._mlflow_config = self.load_config(mlflow_config)
@@ -34,6 +39,17 @@ class PredictionAbstraction(ABC):
         self._model_fit = None
 
         #self.setup()
+
+    def path(self, model_type: str ):
+
+
+
+        return [os.environ["PD_MLFLOW_CONFIG_PATH"], os.environ["PD_MODEL_CONFIG_PATH"]] if model_type == 'PD' \
+            else [os.environ["LGD_MLFLOW_CONFIG_PATH"], os.environ["LGD_MODEL_CONFIG_PATH"]]
+
+
+
+
 
     @abstractmethod
     def apply(self):

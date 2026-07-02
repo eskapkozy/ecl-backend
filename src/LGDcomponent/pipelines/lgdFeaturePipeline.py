@@ -13,6 +13,7 @@ import yaml
 
 from LGDcomponent.lossFeature import LossFeatures
 import src.LGDcomponent.lgd_Functions as lgd_func
+from src.pipelines.Features.lgd_geo import GeoFeatures
 from src.pipelines.Features.feature_selector import FeatureSelector
 from src.pipelines.Features.featurePipeline import FeaturePipeline
 from src.pipelines.Features.delinquency_features import DelinquencyFeatures
@@ -71,23 +72,50 @@ class LGDFeaturePipeline(FeaturePipeline):
         return lgd_func.compute_lgd_target(hist_defaulted)
 
     # ------------------------------------------------------------------
+    # Imputation — spécifique LGD, override du parent
+    # ------------------------------------------------------------------
+
+    def _impute(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = super()._impute(df)  # garde recuperation, freq_x_recuperation, progression, anticipation
+
+        # LossFeatures
+        df["n_months_in_default"] = df["n_months_in_default"].fillna(0)
+        df["time_to_max_dpd"] = df["time_to_max_dpd"].fillna(0)
+        df["ltv_at_default"] = df["ltv_at_default"].fillna(df["ltv_at_default"].median())
+
+        # CapitalFeatures — ecart_au_plan peut être NaN si rate=0 et n=0 (edge case)
+        df["ecart_au_plan"] = df["ecart_au_plan"].fillna(0)
+
+        # DelinquencyFeatures — tendance NaN si un seul point (den=0)
+        df["tendance"] = df["tendance"].fillna(0)
+
+        # OriginationFeatures — couverture_mi déjà fillna(0) en amont, ok
+        # GeoFeatures — property_type/property_state : pas de NaN attendu (table origination propre)
+
+        return df
+    # ------------------------------------------------------------------
+    # Features — pas de WindowBuilder, historique complet des défauts
+    # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
     # Features — pas de WindowBuilder, historique complet des défauts
     # ------------------------------------------------------------------
 
     def _build_features(self, hist: pd.DataFrame, orig: pd.DataFrame) -> tuple:
-        #hist_defaulted = self._select_defaulted(hist)
         hist_defaulted = hist.copy()
 
         f_delinquency = DelinquencyFeatures(hist_defaulted).build()
         f_capital = CapitalFeatures(hist_defaulted, orig_df=orig).build()
         f_origination = OriginationFeatures(orig).build()
         f_loss = LossFeatures(hist_defaulted).build()
+        f_geo = GeoFeatures(orig).build()  # ← ajout
 
         data = (
             f_delinquency
             .merge(f_capital, on="LOAN_SEQUENCE_NUMBER", how="inner")
             .merge(f_origination, on="LOAN_SEQUENCE_NUMBER", how="inner")
             .merge(f_loss, on="LOAN_SEQUENCE_NUMBER", how="inner")
+            .merge(f_geo, on="LOAN_SEQUENCE_NUMBER", how="inner")  # ← ajout
         )
 
         return self._impute(data), hist

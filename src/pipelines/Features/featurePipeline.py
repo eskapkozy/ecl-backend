@@ -98,6 +98,8 @@ class FeaturePipeline(ABC):
         df["anticipation"]        = df["anticipation"].fillna(df["anticipation"].median())
         return df
 
+
+
     # ------------------------------------------------------------------
     # Construction des features — commune à tous les modèles
     # ------------------------------------------------------------------
