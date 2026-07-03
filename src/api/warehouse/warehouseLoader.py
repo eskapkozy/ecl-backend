@@ -31,28 +31,77 @@ class WarehouseLoader:
         conn.close()
         print(f"{table} : {len(df)} lignes chargées")
 
-
-
     def _prepare_hist(self, hist: pd.DataFrame) -> pd.DataFrame:
         hist = hist.copy()
-        print(hist.columns.tolist())
         hist["REMAINING_MONTHS_TO_LEGAL_MATURITY"] = hist["REMAINING_MONTHS_TO_LEGAL_MATURITY"].fillna(-1).astype(int)
         hist["ZERO_BALANCE_EFFECTIVE_DATE"] = pd.to_datetime(hist["ZERO_BALANCE_EFFECTIVE_DATE"], errors="coerce")
         hist["DUE_DATE_OF_LAST_PAID_INSTALLMENT"] = pd.to_datetime(hist["DUE_DATE_OF_LAST_PAID_INSTALLMENT"],
                                                                    errors="coerce")
-        return hist
+        hist["NET_SALE_PROCEEDS"] = pd.to_numeric(hist["NET_SALE_PROCEEDS"], errors="coerce")
+        hist["MI_RECOVERIES"] = pd.to_numeric(hist["MI_RECOVERIES"], errors="coerce")
+        hist["NON_MI_RECOVERIES"] = pd.to_numeric(hist["NON_MI_RECOVERIES"], errors="coerce")
+        hist["DEFECT_SETTLEMENT_DATE"] = pd.to_datetime(
+            hist["DEFECT_SETTLEMENT_DATE"], errors="coerce"
+        )
+
+        hist["TOTAL_EXPENSES"] = pd.to_numeric( hist["TOTAL_EXPENSES"], errors="coerce")
+        hist["LEGAL_COSTS"] = pd.to_numeric(hist["LEGAL_COSTS"], errors="coerce")
+        hist["MAINTENANCE_AND_PRESERVATION_COSTS"] = pd.to_numeric(hist["MAINTENANCE_AND_PRESERVATION_COSTS"], errors="coerce")
+        hist["TAXES_AND_INSURANCE"] = pd.to_numeric(hist["TAXES_AND_INSURANCE"], errors="coerce")
+        hist["MISCELLANEOUS_EXPENSES"] = pd.to_numeric(hist["MISCELLANEOUS_EXPENSES"], errors="coerce")
+        hist["ACTUAL_LOSS_CALCULATION"] = pd.to_numeric(hist["ACTUAL_LOSS_CALCULATION"], errors="coerce")
+        hist["CUMULATIVE_MODIFICATION_COST"] = pd.to_numeric(hist["CUMULATIVE_MODIFICATION_COST"], errors="coerce")
+        hist["ZERO_BALANCE_REMOVAL_UPB"] = pd.to_numeric(hist["ZERO_BALANCE_REMOVAL_UPB"], errors="coerce")
+        hist["DELINQUENT_ACCRUED_INTEREST"] = pd.to_numeric(hist["DELINQUENT_ACCRUED_INTEREST"], errors="coerce")
+        hist["CURRENT_MONTH_MODIFICATION_COST"] = pd.to_numeric(hist["CURRENT_MONTH_MODIFICATION_COST"], errors="coerce")
+
+        HIST_COL_ORDER = [
+            "LOAN_SEQUENCE_NUMBER",
+            "MONTHLY_REPORTING_PERIOD",
+            "CURRENT_ACTUAL_UPB",
+            "CURRENT_LOAN_DELINQUENCY_STATUS",
+            "LOAN_AGE",
+            "REMAINING_MONTHS_TO_LEGAL_MATURITY",
+            "DEFECT_SETTLEMENT_DATE",
+            "MODIFICATION_FLAG",
+            "ZERO_BALANCE_CODE",
+            "ZERO_BALANCE_EFFECTIVE_DATE",
+            "CURRENT_INTEREST_RATE",
+            "CURRENT_NON_INTEREST_BEARING_UPB",
+            "DUE_DATE_OF_LAST_PAID_INSTALLMENT",
+            "MI_RECOVERIES",
+            "NET_SALE_PROCEEDS",
+            "NON_MI_RECOVERIES",
+            "TOTAL_EXPENSES",
+            "LEGAL_COSTS",
+            "MAINTENANCE_AND_PRESERVATION_COSTS",
+            "TAXES_AND_INSURANCE",
+            "MISCELLANEOUS_EXPENSES",
+            "ACTUAL_LOSS_CALCULATION",
+            "CUMULATIVE_MODIFICATION_COST",
+            "INTEREST_RATE_STEP_INDICATOR",
+            "PAYMENT_DEFERRAL_FLAG",
+            "ESTIMATED_LTV",
+            "ZERO_BALANCE_REMOVAL_UPB",
+            "DELINQUENT_ACCRUED_INTEREST",
+            "DELINQUENCY_DUE_TO_DISASTER",
+            "BORROWER_ASSISTANCE_STATUS_CODE",
+            "CURRENT_MONTH_MODIFICATION_COST",
+            "INTEREST_BEARING_UPB",
+        ]
+
+        return hist[HIST_COL_ORDER]
 
     def _prepare_orig(self, orig: pd.DataFrame) -> pd.DataFrame:
         orig = orig.copy()
-        print(orig.columns.tolist())
         orig["CREDIT_SCORE"] = pd.to_numeric(orig["CREDIT_SCORE"], errors="coerce").fillna(-1).astype(int)
         orig["NUMBER_OF_BORROWERS"] = orig["NUMBER_OF_BORROWERS"].fillna(-1).astype(int)
-        orig["CREDIT_SCORE"] = orig["CREDIT_SCORE"].fillna(-1).astype(int)
         orig["MI_PERCENTAGE"] = orig["MI_PERCENTAGE"].fillna(0)
         orig["POSTAL_CODE"] = orig["POSTAL_CODE"].astype(str)
         orig["PROGRAM_INDICATOR"] = pd.to_numeric(orig["PROGRAM_INDICATOR"], errors="coerce").fillna(-1).astype(int)
         orig["MORTGAGE_INSURANCE_CANCELLATION"] = pd.to_numeric(orig["MORTGAGE_INSURANCE_CANCELLATION"],
                                                                 errors="coerce").fillna(-1).astype(int)
+        
 
         ORIG_COL_ORDER = [
             "LOAN_SEQUENCE_NUMBER", "CREDIT_SCORE", "FIRST_TIME_HOMEBUYER_FLAG", "MSA",
@@ -64,7 +113,6 @@ class WarehouseLoader:
             "RELIEF_REFINANCE_INDICATOR", "PROPERTY_VALUATION_METHOD", "IO_FLAG",
             "MORTGAGE_INSURANCE_CANCELLATION", "IS_MISSING_CREDIT_SCORE", "IS_MISSING_DTI"
         ]
-
 
         return orig[ORIG_COL_ORDER]
 

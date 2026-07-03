@@ -17,8 +17,11 @@ class PredictionAbstraction(ABC):
                  model_config: str = None,
                  model_type: str = None):
 
-        mlflow_config = mlflow_config or self.path(model_type)[0] #os.environ["MLFLOW_CONFIG_PATH"]
-        model_config  = model_config  or self.path(model_type)[1] #os.environ["MODEL_CONFIG_PATH"]
+        if mlflow_config is None or model_config is None:
+            default_mlflow, default_model = self.path(model_type)
+
+            mlflow_config = mlflow_config or default_mlflow
+            model_config = model_config or default_model
 
 
 
@@ -40,12 +43,22 @@ class PredictionAbstraction(ABC):
 
         #self.setup()
 
-    def path(self, model_type: str ):
+    def path(self, model_type: str) -> tuple[str, str]:
+        model_type = model_type.upper()
 
+        if model_type == "PD":
+            return (
+                os.environ["PD_MLFLOW_CONFIG_PATH"],
+                os.environ["PD_MODEL_CONFIG_PATH"],
+            )
 
+        if model_type == "LGD":
+            return (
+                os.environ["LGD_MLFLOW_CONFIG_PATH"],
+                os.environ["LGD_MODEL_CONFIG_PATH"],
+            )
 
-        return [os.environ["PD_MLFLOW_CONFIG_PATH"], os.environ["PD_MODEL_CONFIG_PATH"]] if model_type == 'PD' \
-            else [os.environ["LGD_MLFLOW_CONFIG_PATH"], os.environ["LGD_MODEL_CONFIG_PATH"]]
+        raise ValueError(f"Unknown model_type: {model_type}")
 
 
 

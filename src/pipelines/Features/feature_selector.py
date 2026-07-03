@@ -6,7 +6,8 @@ Responsabilité : sélection et mise à l'échelle des features
 
 Optimisation : 2 appels sklearn au lieu de 19 (un par groupe de scaling).
 """
-from venv import logger
+import logging
+logger = logging.getLogger(__name__)
 
 import pandas as pd
 

@@ -42,10 +42,10 @@ import yaml
 from matplotlib import pyplot as plt
 from sklearn.metrics import log_loss, accuracy_score, confusion_matrix, mean_squared_error
 
-from LGDcomponent.pipelines.lgdFeaturePipeline import LGDFeaturePipeline
+
 from src.Utile.artifactManager import ArtifactManager, ArtifactType
 from src.runAbstraction import RunAbstraction
-from pipelines.Features.Lgd_discretizer import LGDDiscretizer
+from src.pipelines.Features.Lgd_discretizer import LGDDiscretizer
 
 
 class LGDRun(RunAbstraction):

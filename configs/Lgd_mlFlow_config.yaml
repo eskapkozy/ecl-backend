@@ -1,15 +1,15 @@
-run_id: 5d1f5484377d453a97625d3c424ffdde
+run_id: c941d55209d1427ca872ad2c7e146f73
 
 #tracking_uri: "http://mlflow:5000"
-tracking_uri: "http://localhost:5000"
+tracking_uri: "http://mlflow:5000"
 experiment_name: LGD_modelling
 
 preprocessing:
   scaler:
     enabled: true
-    tracking_uri: http://localhost:5000 #"http://mlflow:5000"
+    tracking_uri: "http://mlflow:5000" #http://localhost:5000
     experiment_name: LGD_modelling
-    run_id: 2037a443f35748359cc6d6d744490efa
+    run_id: 239eb675b01c481eacf5837cc911a393
     run_name: LGD_scaler_preprocessing_v1
     run_role: preprocessing
     model_family: LGD

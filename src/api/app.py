@@ -2,17 +2,24 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.router.pd_model_route import router as pd_router
+from src.api.router.lgd_model_route import router as lgd_router
 
+import logging
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+)
 # TODO: remplacer par config centralisée (.env + settings.py)
 
 app = FastAPI()
 
 # -----------------
-# DEFAULT
+# DEFAULT and LGD
 # -----------------
 
 app.include_router(pd_router)
+app.include_router(lgd_router)
 
 
 

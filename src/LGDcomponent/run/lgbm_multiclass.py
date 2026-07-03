@@ -2,9 +2,7 @@ import mlflow
 import numpy as np
 import optuna
 import pandas as pd
-from statsmodels.sandbox.infotheo import discretize
 
-from LGDcomponent.pipelines.lgdFeaturePipeline import LGDFeaturePipeline
 from src.LGDcomponent.run.LGD_run import LGDRun
 
 import lightgbm as lgb

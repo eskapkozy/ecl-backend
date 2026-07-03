@@ -17,12 +17,14 @@ class PDFeaturePipeline(FeaturePipeline):
 """
 
 from abc import ABC, abstractmethod
-from venv import logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 
-import select
+
 import yaml
 
 from src.pipelines.Features.window_builder        import WindowBuilder

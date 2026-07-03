@@ -2,9 +2,12 @@ import pandas as pd
 
 
 
-from LGDcomponent.pipelines.lgdFeaturePipeline import LGDFeaturePipeline
+from src.LGDcomponent.pipelines.lgdFeaturePipeline import LGDFeaturePipeline
 from src.predictionAbstraction import PredictionAbstraction
 
+import logging
+
+logger = logging.getLogger(__name__)
 
 class LGDPrediction(PredictionAbstraction):
 
@@ -47,11 +50,24 @@ class LGDPrediction(PredictionAbstraction):
 
         # load data
 
+
         self.discretizer, self._model_fit = self._load_data()
+
+        self.load_data_error_log()
+
+
+
+
         self.bin_edges_ = self.discretizer.bin_edges_
 
 
         scaler = self._load_scaler()
+
+        self.scaler_error_log(scaler)
+
+
+
+        logger.info("Building feature pipeline...")
 
         # scale x data
 
@@ -59,6 +75,8 @@ class LGDPrediction(PredictionAbstraction):
             state= 'Prediction',
             n_bins=self._model_config['model']['n_bins']
         )
+
+        logger.info("Feature matrix built successfully.")
 
         self._x_data = self._featurePipeline.build(self._hist, self._orig, scaler)
 
@@ -71,6 +89,8 @@ class LGDPrediction(PredictionAbstraction):
 
 
     def _load_data(self):
+
+        logger.info("Loading prediction artifacts...")
         run_id = self._mlflow_config['run_id']
 
         config = [
@@ -80,3 +100,26 @@ class LGDPrediction(PredictionAbstraction):
         ]
 
         return self._artifactmanager.load_All(run_id=run_id, configList=config)
+
+
+    def load_data_error_log(self):
+
+        if self.discretizer is None:
+            logger.error("Discretizer artifact is None.")
+            raise RuntimeError("Failed to load discretizer artifact.")
+
+        logger.info("Discretizer loaded successfully.")
+
+        if self._model_fit is None:
+            logger.error("Model artifact is None.")
+            raise RuntimeError("Failed to load model artifact.")
+
+        logger.info("Prediction model loaded successfully.")
+
+    def scaler_error_log(self, scaler):
+
+        if scaler is None:
+            logger.error("Scaler artifact is None.")
+            raise RuntimeError("Failed to load scaler artifact.")
+
+        logger.info("Scaler loaded successfully.")

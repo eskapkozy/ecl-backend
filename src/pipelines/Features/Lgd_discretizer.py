@@ -1,4 +1,5 @@
-from venv import logger
+import logging
+logger = logging.getLogger(__name__)
 
 import pandas as pd
 import numpy as np

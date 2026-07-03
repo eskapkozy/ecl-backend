@@ -11,7 +11,7 @@ import pandas as pd
 import numpy as np
 import yaml
 
-from LGDcomponent.lossFeature import LossFeatures
+from src.LGDcomponent.lossFeature import LossFeatures
 import src.LGDcomponent.lgd_Functions as lgd_func
 from src.pipelines.Features.lgd_geo import GeoFeatures
 from src.pipelines.Features.feature_selector import FeatureSelector

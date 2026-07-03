@@ -1,23 +1,41 @@
 CREATE TABLE IF NOT EXISTS loans_performance (
-    LOAN_SEQUENCE_NUMBER                VARCHAR(20)  NOT NULL,
-    MONTHLY_REPORTING_PERIOD            DATE         NOT NULL,
-    CURRENT_ACTUAL_UPB                  NUMERIC(15,2),
-    CURRENT_LOAN_DELINQUENCY_STATUS     VARCHAR(5),
-    LOAN_AGE                            SMALLINT,
-    REMAINING_MONTHS_TO_LEGAL_MATURITY  NUMERIC(6,1),
-    MODIFICATION_FLAG                   CHAR(1),
-    ZERO_BALANCE_CODE                   SMALLINT,
-    ZERO_BALANCE_EFFECTIVE_DATE         DATE,
-    CURRENT_INTEREST_RATE               NUMERIC(6,3),
-    CURRENT_NON_INTEREST_BEARING_UPB    NUMERIC(15,2),
-    DUE_DATE_OF_LAST_PAID_INSTALLMENT   DATE,
-    INTEREST_RATE_STEP_INDICATOR        CHAR(1),
-    ESTIMATED_LTV                       NUMERIC(6,2),
-    DELINQUENCY_DUE_TO_DISASTER         CHAR(1),
-    BORROWER_ASSISTANCE_STATUS_CODE     CHAR(1),
-    INTEREST_BEARING_UPB                NUMERIC(15,2),
+    LOAN_SEQUENCE_NUMBER                        VARCHAR(20) NOT NULL,
+    MONTHLY_REPORTING_PERIOD                    DATE NOT NULL,
+    CURRENT_ACTUAL_UPB                          NUMERIC(15,2),
+    CURRENT_LOAN_DELINQUENCY_STATUS             VARCHAR(5),
+    LOAN_AGE                                    SMALLINT,
+    REMAINING_MONTHS_TO_LEGAL_MATURITY          SMALLINT,
+    DEFECT_SETTLEMENT_DATE                      DATE,
+    MODIFICATION_FLAG                           CHAR(1),
+    ZERO_BALANCE_CODE                           SMALLINT,
+    ZERO_BALANCE_EFFECTIVE_DATE                 DATE,
+    CURRENT_INTEREST_RATE                       NUMERIC(6,3),
+    CURRENT_NON_INTEREST_BEARING_UPB            NUMERIC(15,2),
+    DUE_DATE_OF_LAST_PAID_INSTALLMENT           DATE,
+    MI_RECOVERIES                               NUMERIC(15,2),
+    NET_SALE_PROCEEDS                           NUMERIC(15,2),
+    NON_MI_RECOVERIES                           NUMERIC(15,2),
+    TOTAL_EXPENSES                              NUMERIC(15,2),
+    LEGAL_COSTS                                 NUMERIC(15,2),
+    MAINTENANCE_AND_PRESERVATION_COSTS          NUMERIC(15,2),
+    TAXES_AND_INSURANCE                         NUMERIC(15,2),
+    MISCELLANEOUS_EXPENSES                      NUMERIC(15,2),
+    ACTUAL_LOSS_CALCULATION                     NUMERIC(15,2),
+    CUMULATIVE_MODIFICATION_COST                NUMERIC(15,2),
+    INTEREST_RATE_STEP_INDICATOR                CHAR(1),
+    PAYMENT_DEFERRAL_FLAG                       CHAR(1),
+    ESTIMATED_LTV                               NUMERIC(6,2),
+    ZERO_BALANCE_REMOVAL_UPB                    NUMERIC(15,2),
+    DELINQUENT_ACCRUED_INTEREST                 NUMERIC(15,2),
+    DELINQUENCY_DUE_TO_DISASTER                 CHAR(1),
+    BORROWER_ASSISTANCE_STATUS_CODE             CHAR(1),
+    CURRENT_MONTH_MODIFICATION_COST             NUMERIC(15,2),
+    INTEREST_BEARING_UPB                        NUMERIC(15,2),
+
     PRIMARY KEY (LOAN_SEQUENCE_NUMBER, MONTHLY_REPORTING_PERIOD)
 );
+
+
 
 CREATE TABLE IF NOT EXISTS loans_origination (
     LOAN_SEQUENCE_NUMBER            VARCHAR(20) PRIMARY KEY,
@@ -35,11 +53,11 @@ CREATE TABLE IF NOT EXISTS loans_origination (
     CHANNEL                         CHAR(1),
     PPM_FLAG                        CHAR(1),
     PRODUCT_TYPE                    VARCHAR(5),
-    STATE                           CHAR(2),
+    STATE                  CHAR(2),
     PROPERTY_TYPE                   VARCHAR(5),
     POSTAL_CODE                     VARCHAR(10),
     LOAN_PURPOSE                    CHAR(1),
-    ORIGINAL_LOAN_TERM              SMALLINT,
+    ORIGINAL_LOAN_TERM               SMALLINT,
     NUMBER_OF_BORROWERS             NUMERIC(5,1),
     SELLER_NAME                     VARCHAR(100),
     SERVICER_NAME                   VARCHAR(100),
@@ -54,4 +72,14 @@ CREATE TABLE IF NOT EXISTS loans_origination (
     IS_MISSING_DTI                  SMALLINT
 );
 
-CREATE INDEX IF NOT EXISTS idx_perf_loan ON loans_performance(LOAN_SEQUENCE_NUMBER);
+CREATE TABLE IF NOT EXISTS loans_default (
+    LOAN_SEQUENCE_NUMBER   VARCHAR(20) PRIMARY KEY,
+    DEFAULT_FLAG           SMALLINT NOT NULL,
+    DEFAULT_TYPE           VARCHAR(20),
+    COMPUTED_AT            TIMESTAMP DEFAULT NOW(),
+    FOREIGN KEY (LOAN_SEQUENCE_NUMBER)
+        REFERENCES loans_origination(LOAN_SEQUENCE_NUMBER)
+);
+
+CREATE INDEX IF NOT EXISTS idx_perf_loan ON loans_performance (LOAN_SEQUENCE_NUMBER);
+CREATE INDEX IF NOT EXISTS idx_default_flag ON loans_default(DEFAULT_FLAG);

@@ -11,17 +11,17 @@ model:
 evaluation:
   regression_result:
     rmse:
-      value: 0.2763284610663373
+      value: 0.27387071134622265
     dxy:
-      value: 0.2609495631478002
+      value: 0.2742079270666532
   calibration_result:
     ece:
-      value: 0.02476669007736647
+      value: 0.02385186225276891
 mlflow:
   tracking_uri: http://localhost:5000
   experiment_name: LGD_modelling
   run_artifact_path:
-    run_id: 5d1f5484377d453a97625d3c424ffdde
+    run_id: c941d55209d1427ca872ad2c7e146f73
     lgd_discretizer:
       name: lgd_discretizer
       path: lgd_discretizer
@@ -42,7 +42,7 @@ mlflow:
       enabled: true
       tracking_uri: http://localhost:5000
       experiment_name: LGD_modelling
-      run_id: 2037a443f35748359cc6d6d744490efa
+      run_id: 239eb675b01c481eacf5837cc911a393
       run_name: LGD_scaler_preprocessing_v1
       run_role: preprocessing
       model_family: LGD
